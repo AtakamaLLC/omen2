@@ -1,7 +1,7 @@
-"""Simple orm object manager."""
+"""Simple object manager."""
 
 import abc
-from notanorm import DbBase, SqliteDb, errors as err
+from notanorm import DbBase, SqliteDb, errors as err, DbType, DbTable
 from typing import Any
 
 class OmenError(RuntimeError):
@@ -33,6 +33,20 @@ class RowIter:
             return self.__first
         return next(self.__iter)
 
+def default_type(typ: DbType):
+    if typ == DbType.ANY:
+        return Any
+    if typ == DbType.INTEGER:
+        return int
+    if typ == DbType.FLOAT:
+        return float
+    if typ == DbType.TEXT:
+        return str
+    if typ == DbType.BLOB:
+        return bytes
+    if typ == DbType.DOUBLE:
+        return float
+
 
 class Omen(abc.ABC):
     """Object relational manager: read and write objects from a db."""
@@ -45,33 +59,47 @@ class Omen(abc.ABC):
         self.db = db
 
         if self.version is not None:
-            # omen, built-in version management
-            self.db.query("create table if not exists _omen(version text);")
-            omen_info = self.db.select_one("_omen")
+            self._create_and_migrate(migrate)
 
-            if not omen_info:
-                self.db.query(self.schema(self.version))
+    @staticmethod
+    def __multi_query(db, sql):
+        unlikely = "@!~@"
+        sql = sql.replace("\\;", unlikely)
+        queries = sql.split(";")
+        for q in queries:
+            q = q.replace(unlikely, ";")
+            db.query(q)
+
+    def _create_and_migrate(self, migrate):
+        # omen, built-in version management
+        self.db.query("create table if not exists _omen(version text);")
+        omen_info = self.db.select_one("_omen")
+
+        if not omen_info:
+            self.__multi_query(self.db, self.schema(self.version))
+            self.db.upsert("_omen", version=self.version)
+
+        if migrate:
+            restore_info = self.backup()
+            try:
+                next_version = omen_info.version
+                while omen_info.version != self.version:
+                    next_version += 1
+                    self.migrate(self.db, next_version)
                 self.db.upsert("_omen", version=self.version)
-
-            if migrate:
-                restore_info = self.backup()
-                try:
-                    next_version = omen_info.version
-                    while omen_info.version != self.version:
-                        next_version += 1
-                        self.migrate(db, next_version)
-                    self.db.upsert("_omen", version=self.version)
-                finally:
-                    self.restore(restore_info)
+            finally:
+                self.restore(restore_info)
 
     def __init_subclass__(cls):
         if not cls.model:
-            cls.model = SqliteDb(":memory:")
-            cls.model.query(cls.schema(cls.version))
+            db = SqliteDb(":memory:")
+            cls.__multi_query(db, cls.schema(cls.version))
+            cls.model = db.model()
 
             # creates a new type, derived from Table, with attributes matchiing the columns
             for table, info in cls.model.items():
-                setattr(cls, table, type(table, Table, {col.name: default_type(col.typ) for col in info.columns}))
+                setattr(cls, table, type(table, (Table, ), {}))
+                getattr(cls, table).set_schema(info)
 
     @classmethod
     @abc.abstractmethod
@@ -89,21 +117,34 @@ class Omen(abc.ABC):
 
 
 class Table:
+    @classmethod
+    def set_schema(cls, schema: DbTable):
+        setattr(cls, "__annotations__", getattr(cls, "__annotations__", {}))
+        for col in schema.columns:
+            typ = default_type(col.typ)
+            cls.__annotations__[col.name] = typ
+            if col.default:
+                setattr(cls, col.name, typ(col.default))
+
     def __init__(self, mgr):
         self.__manager__ = mgr
+
+    @property
+    def db(self):
+        return self.__manager__.db
 
     def insert(self, obj):
         """Insert an object into the db, object must support to_dict()."""
         vals = obj.to_dict()
-        self.__manager__.db.insert(obj.__table_name__, vals)
+        self.db.insert(obj.__table_name__, vals)
 
     def update(self, obj):
         """Update the db from an object, object must support to_dict()."""
         vals = obj.to_dict()
-        self.__manager__.db.update(obj.__table_name__, vals)
+        self.db.update(obj.__table_name__, vals)
 
     def __select(self, cls, where):
-        for row in self.__manager__.db.select(cls.__table_name__, None, where):
+        for row in self.db.select(cls.__table_name__, None, where):
             yield cls.from_dict(row.__dict__)
 
     def select(self, cls, where={}, **kws):
@@ -114,7 +155,7 @@ class Table:
     def count(self, cls, where={}, **kws):
         """Return count of objs matchig where clause."""
         kws.update(where)
-        return self.__manager__.db.count(cls.__table_name__, kws)
+        return self.db.count(cls.__table_name__, kws)
 
     def select_one(self, cls, where={}, **kws):
         """Return one row, None, or raises an OmenMoreThanOneError."""

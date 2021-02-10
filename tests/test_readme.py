@@ -6,18 +6,19 @@ from omen2 import Omen
 class MyOmen(Omen):
     version = 2
 
-    @staticmethod
-    def schema(version):
+    @classmethod
+    def schema(cls, version):
         # if you want to test migration, store old versions, and return them here
         assert version == 2
 
         # use a notanorm-compatible schema
         return """
-            create table cars(id integer primary key, color text not null, gas_level real default 1.0);
+            create table cars(id integer primary key, color text not null, gas_level double default 1.0);
             create table doors(carid integer, type text);
         """
 
-    def migrate(db, version):
+    @classmethod
+    def migrate(cls, db, version):
         # you should create a migration for each version
         assert False
 
@@ -29,7 +30,7 @@ class Hinge(MyOmen.doors.relation):
 # every table has a row_type, you can derive from it
 class Car(MyOmen.cars.row_type):
     # shortcut for: car.__manager__.doors.select(id=self.id)
-    doors: Hinge[Car.id]
+    doors: Hinge["Car.id"]
 
     def __init__(self, **kws):
         self.not_saved_to_db = "some thing"
