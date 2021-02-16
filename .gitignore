@@ -4,3 +4,6 @@ env
 tests/*_gen.py
 .coverage
 .idea
+build/
+dist/
+*.egg-info/

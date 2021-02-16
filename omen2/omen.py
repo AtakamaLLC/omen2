@@ -9,6 +9,7 @@ from typing import Any, Optional, Dict, Type, Set
 
 from omen2.errors import OmenMoreThanOneError
 from omen2.object import ObjBase, ObjType
+from omen2.codegen import CodeGen
 
 
 class RowIter:
@@ -41,9 +42,14 @@ class RowIter:
             return self.__first
         return next(self.__iter)
 
-def default_type(typ: DbType):
+
+def any_type(arg):
+    return arg
+
+
+def default_type(typ: DbType) -> Any:
     if typ == DbType.ANY:
-        return Any
+        return any_type
     if typ == DbType.INTEGER:
         return int
     if typ == DbType.FLOAT:
@@ -54,17 +60,20 @@ def default_type(typ: DbType):
         return bytes
     if typ == DbType.DOUBLE:
         return float
+    raise ValueError("unknown type: %s" % typ)
 
 
 # noinspection PyMethodMayBeStatic
 class Omen(abc.ABC):
     """Object relational manager: read and write objects from a db."""
 
+    # abstract classes often do this, so # pylint: disable=no-self-use
+
     version: Optional[int] = None
     model: DbModel = None
-    table_types: Dict[str, Type['Table']] = {}
+    table_types: Dict[str, Type["Table"]] = {}
 
-    def __init_subclass__(cls):
+    def __init_subclass__(cls, **_kws):
         if not cls.model:
             db = SqliteDb(":memory:")
             cls.__multi_query(db, cls.schema(cls.version))
@@ -103,7 +112,6 @@ class Omen(abc.ABC):
         try:
             generated = importlib.import_module(module)
         except ImportError:
-            from .codegen import CodeGen
             CodeGen.generate_from_class(self.__class__)
             generated = importlib.import_module(module)
 
@@ -161,11 +169,13 @@ class Omen(abc.ABC):
 
 # noinspection PyDefaultArgument,PyProtectedMember
 class Table:
+    # pylint: disable=dangerous-default-value, protected-access
+
     table_name: str
     row_type: ObjType
     field_names: Set[str]
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **_kws):
         cls.row_type.table_type = cls
 
     def __init__(self, mgr):

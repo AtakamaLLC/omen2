@@ -2,13 +2,15 @@ import keyword
 import os
 import sys
 import importlib
+from typing import TYPE_CHECKING
 
-from notanorm import DbTable
+if TYPE_CHECKING:
+    from notanorm import DbTable
 
 
 class CodeGen:
-    def __init__(self, path):
-        self.path = path
+    def __init__(self, module_path):
+        self.path = module_path
         self.package, self.module, self.class_name = self.parse_class_path(self.path)
         self.base_cls = self.import_mod()
         self.model = self.base_cls.model
@@ -21,8 +23,10 @@ class CodeGen:
                     col.name = col.name + "_"
 
     @staticmethod
-    def gen_class(out, name, dbtab: DbTable):
+    def gen_class(out, name, dbtab: "DbTable"):
+        # pylint: disable=import-outside-toplevel
         from omen2.omen import default_type
+
         print("class " + name + "_row(ObjBase):", file=out)
 
         keys = [col.name for col in dbtab.columns]
@@ -55,21 +59,37 @@ class CodeGen:
 
         print(file=out)
         print("class " + name + "(Table):", file=out)
-        print("    table_name = \"" + name + "\"", file=out)
+        print('    table_name = "' + name + '"', file=out)
         print("    row_type = " + name + "_row", file=out)
-        print("    field_names = {'" + "', '".join(col.name for col in dbtab.columns) + "'}", file=out)
+        print(
+            "    field_names = {'"
+            + "', '".join(col.name for col in dbtab.columns)
+            + "'}",
+            file=out,
+        )
         print("\n", file=out)
         print("class " + name + "_relation(Relation[" + name + "_row]):", file=out)
         print("    table_type = " + name, file=out)
 
-    def output_path(self):
+    def output_path(self, source_file=None):
+        if source_file:
+            path, _ = os.path.splitext(source_file)
+            path += "_gen.py"
+            return path
         package, module, _cls = self.parse_class_path(self.path)
-        return (package + "." + module).replace(".", "/") + "_gen.py"
+        path = (package + "." + module).replace(".", "/") + "_gen.py"
+        return path
 
     @staticmethod
     def gen_import(out):
-        print("from omen2 import ObjBase, Table, Relation", file=out, )
-        print("\n", file=out, )
+        print(
+            "from omen2 import ObjBase, Table, Relation",
+            file=out,
+        )
+        print(
+            "\n",
+            file=out,
+        )
 
     def gen_monolith(self, out):
         self.gen_import(out)
@@ -77,7 +97,9 @@ class CodeGen:
         for name, dbtab in self.model.items():
             self.gen_class(out, name, dbtab)
             print("\n", file=out)
-        print("__all__ = [\"" + "\", \"".join(name for name in self.model) + "\"]", file=out)
+        print(
+            '__all__ = ["' + '", "'.join(name for name in self.model) + '"]', file=out
+        )
 
     @staticmethod
     def parse_class_path(path):
@@ -93,16 +115,18 @@ class CodeGen:
         return getattr(module, self.class_name)
 
     @staticmethod
-    def generate_from_class(cls):
-        path = cls.__module__ + "." + cls.__name__
-        CodeGen.generate_from_path(path)
+    def generate_from_class(class_type):
+        class_path = class_type.__module__ + "." + class_type.__name__
+        CodeGen.generate_from_path(class_path, class_type.__file__)
 
     @staticmethod
-    def generate_from_path(path):
-        cg = CodeGen(path)
-        out_path = cg.output_path()
-        with open(out_path, "w") as outf:
+    def generate_from_path(class_path, source_file=None):
+        cg = CodeGen(class_path)
+        out_path = cg.output_path(source_file)
+        tmp_path = out_path + ".tmp"
+        with open(tmp_path, "w") as outf:
             cg.gen_monolith(outf)
+        os.replace(tmp_path, out_path)
 
 
 def main():

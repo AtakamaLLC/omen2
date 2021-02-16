@@ -8,6 +8,8 @@ T = TypeVar("T")
 
 # noinspection PyProtectedMember,PyDefaultArgument
 class Relation(Generic[T]):
+    # pylint: disable=protected-access, dangerous-default-value
+
     table_type: "Table" = None
 
     def __init__(self, _from: "ObjBase", _init=None, **where):
@@ -71,4 +73,3 @@ class Relation(Generic[T]):
             with item:
                 self._link_obj(item)
         self.__saved.clear()
-

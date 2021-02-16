@@ -2,7 +2,7 @@
 
 import logging
 from threading import RLock
-from typing import TypeVar, Type, TYPE_CHECKING, Optional, Tuple, Set
+from typing import TypeVar, Type, TYPE_CHECKING, Optional, Set
 
 from attr import dataclass
 
@@ -18,11 +18,10 @@ log = logging.getLogger(__name__)
 class Changes(dict):
     pass
 
+
 class ObjLockError(OmenError):
     pass
 
-def to_db(typ, dat):
-    return dat
 
 @dataclass
 class ObjMeta:
@@ -68,7 +67,9 @@ class ObjBase:
     def check_kws(self, dct):
         for k in dct:
             if k not in self.__dict__:
-                raise AttributeError("%s not a valid column in %s", k, self.__class__.__name__)
+                raise AttributeError(
+                    "%s not a valid column in %s" % (k, self.__class__.__name__)
+                )
 
     def matches(self, dct):
         for k, v in dct.items():
@@ -80,7 +81,7 @@ class ObjBase:
     def from_db(cls, dct):
         return cls(**dct)
 
-    def _bind(self, table: "Table"=None, manager: "Omen" = None):
+    def _bind(self, table: "Table" = None, manager: "Omen" = None):
         if table is None:
             table = getattr(manager, self.table_type.table_name)
         self._meta.table = table
@@ -96,6 +97,7 @@ class ObjBase:
             if keys and k not in keys:
                 continue
             if hasattr(v, "to_db"):
+                # pylint: disable=no-member
                 v = v.to_db()
             if v is not None:
                 ret[k] = v
@@ -106,7 +108,7 @@ class ObjBase:
         return self.to_dict(self._pk)
 
     @classmethod
-    def from_row(cls: Type['ObjType'], row) -> 'ObjType':
+    def from_row(cls: Type["ObjType"], row) -> "ObjType":
         """Make new object from dict of serialized data."""
         return cls.from_db(row.__dict__)
 
@@ -153,4 +155,4 @@ class ObjBase:
         self._meta.lock.release()
 
 
-ObjType = TypeVar('ObjType', bound=ObjBase)
+ObjType = TypeVar("ObjType", bound=ObjBase)

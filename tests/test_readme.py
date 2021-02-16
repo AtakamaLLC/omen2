@@ -10,13 +10,11 @@ from omen2.codegen import CodeGen
 
 from tests.schema import MyOmen
 
+
 def code_regen():
-    cg = CodeGen("tests.test_readme.MyOmen")
-    file = os.path.join(os.path.dirname(__file__), "schema_gen.py")
-    tmp = file + ".tmp"
-    with open(tmp, "w") as fh:
-        cg.gen_monolith(fh)
-    os.replace(tmp, file)
+    CodeGen.generate_from_path(
+        "tests.test_readme.MyOmen", os.path.dirname(__file__) + "/schema"
+    )
 
 
 # this has to happen before the import below
@@ -28,7 +26,9 @@ import tests.schema_gen as gen_objs
 class Car(gen_objs.cars_row):
     def __init__(self, color="black", **kws):
         self.not_saved_to_db = "some thing"
-        self.doors = gen_objs.doors_relation(self, kws.pop("doors", None), carid=lambda: self.id)
+        self.doors = gen_objs.doors_relation(
+            self, kws.pop("doors", None), carid=lambda: self.id
+        )
         super().__init__(color=color, **kws)
 
     def __create__(self):
@@ -38,11 +38,12 @@ class Car(gen_objs.cars_row):
 
         # but you can add your own
         self.color = "default black"
-        
+
     @property
     def gas_pct(self):
         # read only props are fine
         return self.gas_level * 100
+
 
 # every db table has a type, you can derive from it
 class Cars(gen_objs.cars):
@@ -60,7 +61,7 @@ def test_readme(tmp_path):
     # by default, you can always iterate on tables
     assert mgr.cars.count() == 0
 
-    car = Car()         # creates a default car (black, full tank)
+    car = Car()  # creates a default car (black, full tank)
     car.color = "red"
     car.gas_level = 0.5
     car.doors.add(gen_objs.doors_row(type="a"))
@@ -75,9 +76,15 @@ def test_readme(tmp_path):
     with pytest.raises(AttributeError, match=r".*gas.*"):
         mgr.cars.add(Car(color="red", gas=0.3))
 
-    mgr.cars.add(Car(color="red", gas_level=0.3, doors=[gen_objs.doors_row(type=str(i)) for i in range(4)]))
+    mgr.cars.add(
+        Car(
+            color="red",
+            gas_level=0.3,
+            doors=[gen_objs.doors_row(type=str(i)) for i in range(4)],
+        )
+    )
 
-    assert sum(1 for _ in mgr.cars.select(color="red")) == 2    # 2
+    assert sum(1 for _ in mgr.cars.select(color="red")) == 2  # 2
 
     log.info("cars: %s", list(mgr.cars.select(color="red")))
 
