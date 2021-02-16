@@ -10,14 +10,14 @@ def long_description():
 
 
 setup(
-    name='notanorm',
+    name='omen2',
     version='0.0.4',
-    description='DB wrapper library',
-    packages=['notanorm'],
+    description='Simple object manager: objects linked to a db',
+    packages=['omen2'],
     long_description=long_description(),
     long_description_content_type="text/markdown",
     setup_requires=['wheel'],
     install_requires=[
-        "mysqlclient",
+        "notanorm",
     ]
 )
