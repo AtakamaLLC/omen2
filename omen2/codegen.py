@@ -117,7 +117,9 @@ class CodeGen:
     @staticmethod
     def generate_from_class(class_type):
         class_path = class_type.__module__ + "." + class_type.__name__
-        CodeGen.generate_from_path(class_path, class_type.__file__)
+        CodeGen.generate_from_path(
+            class_path, sys.modules[class_type.__module__].__file__
+        )
 
     @staticmethod
     def generate_from_path(class_path, source_file=None):

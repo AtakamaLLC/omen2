@@ -1,5 +1,4 @@
 import gc
-import os
 import logging as log
 from multiprocessing.pool import ThreadPool
 
@@ -12,9 +11,7 @@ from tests.schema import MyOmen
 
 
 def code_regen():
-    CodeGen.generate_from_path(
-        "tests.test_readme.MyOmen", os.path.dirname(__file__) + "/schema"
-    )
+    CodeGen.generate_from_class(MyOmen)
 
 
 # this has to happen before the import below
