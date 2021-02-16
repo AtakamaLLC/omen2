@@ -1,3 +1,6 @@
 __pycache__
 env
 *.swp
+tests/*_gen.py
+.coverage
+.idea

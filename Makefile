@@ -1,3 +1,5 @@
+DELETE_ON_ERROR:
+
 env:
 	python -mvirtualenv env
 
@@ -5,7 +7,7 @@ requirements:
 	pip install -r requirements.txt
 
 lint:
-	python -m flake8
+	python -m pylint omen2
 
 test:
 	pytest --cov notanorm -v tests
