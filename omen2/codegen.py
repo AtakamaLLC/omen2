@@ -93,9 +93,9 @@ class CodeGen:
 
         Example: <module-path>_gen.py
         """
-        package, module, _cls = self.parse_class_path(self.path)
-        packmod = ".".join(n for n in (package, module) if n)
-        path = packmod.replace(".", "/") + "_gen.py"
+        base_path = sys.modules[self.base_cls.__module__].__file__
+        path, _ = os.path.splitext(base_path)
+        path = path + "_gen.py"
         return path
 
     @staticmethod

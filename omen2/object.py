@@ -6,11 +6,12 @@ from typing import Type, TYPE_CHECKING, Optional, Set
 
 from dataclasses import dataclass
 
-from omen2.errors import OmenError
-from omen2.relation import Relation
+from .errors import OmenError, OmenMoreThanOneError
+from .relation import Relation
 
 if TYPE_CHECKING:
-    from omen2.omen import Table, Omen
+    from omen2.omen import Omen
+    from omen2 import Table
 
 log = logging.getLogger(__name__)
 
@@ -135,10 +136,14 @@ class ObjBase:
 
     def _rollback(self):
         pk = self._to_pk()
-        self._update(self._meta.table.select_one(**pk))
+        db_row = self._meta.table.db_select(pk)
+        if db_row:
+            if len(db_row) > 1:
+                raise OmenMoreThanOneError("more than 1 %s in the db" % self.__class__)
+        self._update(db_row[0])
 
     def __enter__(self):
-        if self._meta and not self._meta.table:
+        if self._meta and self._meta.table:
             self._meta.lock.acquire()
             self._meta.locked = True
         return self

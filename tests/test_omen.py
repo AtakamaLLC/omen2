@@ -1,5 +1,6 @@
 import gc
 import logging as log
+from contextlib import suppress
 from multiprocessing.pool import ThreadPool
 
 import pytest
@@ -118,3 +119,17 @@ def test_threaded():
 
     # written to db
     assert mgr.db.select_one("cars", id=car.id).gas_level == num_t
+
+
+def test_rollback():
+    db = SqliteDb(":memory:")
+    # upon connection to a database, this will do migration, or creation as needed
+    mgr = MyOmen(db, cars=Cars)
+    car = mgr.cars.add(Car(gas_level=2))
+
+    with suppress(ValueError):
+        with car:
+            car.gas_level = 3
+            raise ValueError
+
+    assert car.gas_level == 2

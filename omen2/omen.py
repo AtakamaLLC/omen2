@@ -4,45 +4,13 @@ import abc
 import importlib
 import os
 import sys
-import weakref
 
-from notanorm import DbBase, SqliteDb, errors as err, DbType, DbModel
-from typing import Any, Optional, Dict, Type, Set
+from notanorm import DbBase, SqliteDb, DbType, DbModel
+from typing import Any, Optional, Dict, Type
 
-from omen2.errors import OmenMoreThanOneError
-from omen2.object import ObjBase
-from omen2.codegen import CodeGen
-
-
-class RowIter:
-    def __init__(self, itr):
-        self.__iter = itr
-        self.__first = None
-        self.__bool = None
-
-    def __len__(self):
-        cnt = 0
-        for _ in self:
-            cnt += 1
-        return cnt
-
-    def __bool__(self):
-        if self.__bool is None:
-            try:
-                self.__first = next(self.__iter)
-                self.__bool = True
-            except (StopIteration, err.TableNotFoundError):
-                self.__bool = False
-        return self.__bool
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        if self.__first is not None:
-            self.__first = None
-            return self.__first
-        return next(self.__iter)
+from .table import Table
+from .object import ObjBase
+from .codegen import CodeGen
 
 
 def any_type(arg):
@@ -192,81 +160,3 @@ class Omen(abc.ABC):
     def backup(self) -> Any:
         """Override this to support backup and recovery during migration."""
         return object()
-
-
-# noinspection PyDefaultArgument,PyProtectedMember
-class Table:
-    # pylint: disable=dangerous-default-value, protected-access
-
-    table_name: str
-    row_type: ObjBase
-    field_names: Set[str]
-
-    def __init_subclass__(cls, **_kws):
-        cls.row_type._table_type = cls
-
-    def __init__(self, mgr):
-        self.manager = mgr
-        self.__cache = weakref.WeakValueDictionary()
-
-    @property
-    def db(self):
-        return self.manager.db
-
-    def add(self, obj):
-        """Insert an object into the db"""
-        self.__cache[obj._to_pk_tuple()] = obj
-        obj._bind(table=self)
-        obj._commit()
-        return obj
-
-    def remove(self, obj: ObjBase):
-        """Remove an object from the db."""
-        self.__cache.pop(obj._to_pk_tuple(), None)
-        vals = obj._to_pk()
-        self.db.delete(**vals)
-
-    def update(self, obj: "ObjBase"):
-        """Add object to db + cache"""
-        self.__cache[obj._to_pk_tuple()] = obj
-        vals = obj._to_dict()
-        self.db.upsert(self.table_name, **vals)
-
-    def insert(self, obj: "ObjBase", id_field):
-        """Update the db + cache from object."""
-        self.__cache[obj._to_pk_tuple()] = obj
-        vals = obj._to_dict()
-        ret = self.db.insert(self.table_name, **vals)
-        with obj:
-            setattr(obj, id_field, ret.lastrowid)
-
-    def __select(self, where):
-        for row in self.db.select(self.table_name, None, where):
-            obj = self.row_type._from_db(row.__dict__)
-            obj = self.__cache.get(obj._to_pk_tuple(), obj)
-            obj._bind(table=self)
-            yield obj
-
-    def select(self, where={}, **kws):
-        """Read objects of specified class."""
-        kws.update(where)
-        yield from self.__select(kws)
-
-    def count(self, where={}, **kws):
-        """Return count of objs matchig where clause."""
-        kws.update(where)
-        return self.db.count(self.table_name, kws)
-
-    def select_one(self, where={}, **kws):
-        """Return one row, None, or raises an OmenMoreThanOneError."""
-        itr = self.select(where, **kws)
-        try:
-            one = next(itr)
-        except StopIteration:
-            return None
-
-        try:
-            next(itr)
-            raise OmenMoreThanOneError
-        except StopIteration:
-            return one
