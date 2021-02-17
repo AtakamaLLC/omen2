@@ -4,3 +4,7 @@ class OmenError(RuntimeError):
 
 class OmenMoreThanOneError(OmenError):
     pass
+
+
+class OmenNoPkError(OmenError, ValueError):
+    pass

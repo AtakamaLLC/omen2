@@ -6,7 +6,7 @@ from typing import Type, TYPE_CHECKING, Optional, Set
 
 from dataclasses import dataclass
 
-from .errors import OmenError, OmenMoreThanOneError
+from .errors import OmenError, OmenMoreThanOneError, OmenNoPkError
 from .relation import Relation
 
 if TYPE_CHECKING:
@@ -34,6 +34,12 @@ class ObjBase:
 
     def __eq__(self, obj):
         return obj._to_pk() == self._to_pk()
+
+    def __repr__(self):
+        return self.__class__.__name__ + "(" + str(self._to_pk()) + ")"
+
+    def __str__(self):
+        return str(self._to_dict())
 
     def __hash__(self):
         return hash(self._to_pk_tuple())
@@ -78,15 +84,13 @@ class ObjBase:
             table = getattr(manager, self._table_type.table_name)
         self._meta.table = table
 
-    def _to_dict(self, keys=None):
+    def _to_dict(self):
         """Get dict of serialized data from self."""
         ret = {}
         for k, v in self.__dict__.items():
             if k[0] == "_":
                 continue
             if k not in self._table_type.field_names:
-                continue
-            if keys and k not in keys:
                 continue
             if hasattr(v, "to_db"):
                 # pylint: disable=no-member
@@ -97,7 +101,13 @@ class ObjBase:
 
     def _to_pk(self):
         """Get dict of serialized data from self, but pk elements only."""
-        return self._to_dict(self._pk)
+        ret = {}
+        for k in self._pk:
+            v = self.__dict__[k]
+            if v is None:
+                raise OmenNoPkError("invalid primary key")
+            ret[k] = self.__dict__[k]
+        return ret
 
     def _need_id(self):
         need_id_field = None

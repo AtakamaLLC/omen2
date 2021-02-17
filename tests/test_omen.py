@@ -1,11 +1,13 @@
 import gc
 import logging as log
+import time
 from contextlib import suppress
 from multiprocessing.pool import ThreadPool
 
 import pytest
 from notanorm import SqliteDb
 
+from omen2.table import ObjCache
 from tests.schema import MyOmen
 
 # by calling force, code will always be regenerated... otherwise it's only regenerated if the import fails
@@ -89,16 +91,28 @@ def test_readme(tmp_path):
     # doors are inserted
     assert len(car.doors) == 4
 
+
+def test_weak_cache(caplog):
+    # important to disable log capturing/reporting otherwise refs to car() could be out there!
+    caplog.clear()
+    caplog.set_level("ERROR")
+
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    car = mgr.cars.add(Car(gas_level=0))
+
     # cache works
-    car2 = mgr.cars.select_one(color="red", gas_level=0.9)
+    car2 = mgr.cars.select_one(gas_level=0)
     assert id(car2) == id(car)
-    assert mgr.cars._Table__cache.data
+    assert len(mgr.cars._cache.data) == 1
 
     # weak dict cleans up
     del car
     del car2
+
     gc.collect()
-    assert not mgr.cars._Table__cache.data
+
+    assert not mgr.cars._cache.data
 
 
 def test_threaded():
@@ -133,3 +147,41 @@ def test_rollback():
             raise ValueError
 
     assert car.gas_level == 2
+
+
+def test_cache():
+    db = SqliteDb(":memory:")
+    # upon connection to a database, this will do migration, or creation as needed
+    mgr = MyOmen(db, cars=Cars)
+    cars = ObjCache(mgr.cars)
+
+    # replace the table with a cache
+    mgr.cars = cars
+    mgr.cars.add(Car(gas_level=2, color="green"))
+    mgr.cars.add(Car(gas_level=3, color="green"))
+    assert mgr.cars._cache
+
+    mgr.db.insert("cars", id=99, gas_level=99, color="green")
+    mgr.db.insert("cars", id=98, gas_level=98, color="green")
+
+    # this won't hit the db
+    assert not any(car.id == 99 for car in mgr.cars.select())
+
+    # this won't hit the db
+    assert not cars.select_one(id=99)
+
+    # this will
+    assert cars.table.select(id=99)
+
+    # now the cache is full
+    assert cars.select(id=99)
+
+    # but still missing others
+    assert not cars.select_one(id=98)
+
+    assert cars.reload() == 4
+
+    log.debug(cars._cache)
+
+    # until now
+    assert cars.select_one(id=98)

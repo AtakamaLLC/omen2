@@ -1,9 +1,10 @@
 import weakref
-from typing import Set
+from contextlib import suppress
+from typing import Set, Dict
 
 from .object import ObjBase
-from .errors import OmenMoreThanOneError
-
+from .errors import OmenMoreThanOneError, OmenNoPkError
+import logging as log
 
 # noinspection PyDefaultArgument,PyProtectedMember
 class Table:
@@ -18,7 +19,7 @@ class Table:
 
     def __init__(self, mgr):
         self.manager = mgr
-        self.__cache = weakref.WeakValueDictionary()
+        self._cache: Dict[dict, ObjBase] = weakref.WeakValueDictionary()
 
     @property
     def db(self):
@@ -26,26 +27,30 @@ class Table:
 
     def add(self, obj):
         """Insert an object into the db"""
-        self.__cache[obj._to_pk_tuple()] = obj
+        self._add_cache(obj)
         obj._bind(table=self)
         obj._commit()
         return obj
 
     def remove(self, obj: ObjBase):
         """Remove an object from the db."""
-        self.__cache.pop(obj._to_pk_tuple(), None)
+        self._cache.pop(obj._to_pk_tuple(), None)
         vals = obj._to_pk()
         self.db.delete(**vals)
 
     def update(self, obj: "ObjBase"):
         """Add object to db + cache"""
-        self.__cache[obj._to_pk_tuple()] = obj
+        self._add_cache(obj)
         vals = obj._to_dict()
         self.db.upsert(self.table_name, **vals)
 
+    def _add_cache(self, obj):
+        with suppress(OmenNoPkError):
+            self._cache[obj._to_pk_tuple()] = obj
+
     def insert(self, obj: "ObjBase", id_field):
         """Update the db + cache from object."""
-        self.__cache[obj._to_pk_tuple()] = obj
+        self._add_cache(obj)
         vals = obj._to_dict()
         ret = self.db.insert(self.table_name, **vals)
         with obj:
@@ -57,8 +62,18 @@ class Table:
     def __select(self, where):
         for row in self.db_select(where):
             obj = self.row_type._from_db(row.__dict__)
-            obj = self.__cache.get(obj._to_pk_tuple(), obj)
-            obj._bind(table=self)
+            cached: ObjBase = self._cache.get(obj._to_pk_tuple())
+            if cached:
+                update = obj._to_dict()
+                already = cached._to_dict()
+                if update != already:
+                    log.debug("updating %s from db", repr(obj))
+                    with obj:
+                        obj._update(update)
+                obj = cached
+            else:
+                obj._bind(table=self)
+                self._add_cache(obj)
             yield obj
 
     def select(self, where={}, **kws):
@@ -74,6 +89,9 @@ class Table:
     def select_one(self, where={}, **kws):
         """Return one row, None, or raises an OmenMoreThanOneError."""
         itr = self.select(where, **kws)
+        return self._return_one(itr)
+
+    def _return_one(self, itr):
         try:
             one = next(itr)
         except StopIteration:
@@ -84,3 +102,28 @@ class Table:
             raise OmenMoreThanOneError
         except StopIteration:
             return one
+
+
+# noinspection PyDefaultArgument,PyProtectedMember
+class ObjCache:
+    # pylint: disable=dangerous-default-value, protected-access
+
+    def __init__(self, table: Table):
+        self.table = table
+        self.table._cache = {}  # change the weak dict to a permanent dict
+
+    def __getattr__(self, item):
+        return getattr(self.table, item)
+
+    def select(self, where={}, **kws):
+        kws.update(where)
+        for v in self.table._cache.values():
+            if v._matches(kws):
+                yield v
+
+    def select_one(self, where={}, **kws):
+        itr = self.select(where, **kws)
+        return self._return_one(itr)
+
+    def reload(self):
+        return sum(1 for _ in self.table.select())

@@ -120,8 +120,6 @@ class Omen(abc.ABC):
         mod1.pop("_omen", None)
         mod2.pop("_omen", None)
         if not mod1 == mod2:
-            print(self.db.model())
-            print(self.model)
             self.__multi_query(self.db, self.schema(self.version))
 
     def _migrate_if_needed(self):

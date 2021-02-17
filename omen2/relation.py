@@ -1,4 +1,4 @@
-from typing import TypeVar, Generic, Callable, Iterable, TYPE_CHECKING, Set
+from typing import TypeVar, Generic, Callable, Iterable, TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from omen2 import ObjBase, Omen, Table
@@ -16,7 +16,7 @@ class Relation(Generic[T]):
         self._from = _from
         self._where = where
         self.__table = None
-        self.__saved: Set["ObjBase"] = set()
+        self.__saved: List["ObjBase"] = []
         if _init:
             for ent in _init:
                 if isinstance(ent, dict):
@@ -36,7 +36,7 @@ class Relation(Generic[T]):
 
     def add(self, obj: "ObjBase"):
         if not self.is_bound():
-            self.__saved.add(obj)
+            self.__saved.append(obj)
         else:
             self._link_obj(obj)
             self.table.add(obj)
