@@ -2,9 +2,9 @@
 
 import logging
 from threading import RLock
-from typing import TypeVar, Type, TYPE_CHECKING, Optional, Set
+from typing import Type, TYPE_CHECKING, Optional, Set
 
-from attr import dataclass
+from dataclasses import dataclass
 
 from omen2.errors import OmenError
 from omen2.relation import Relation
@@ -15,84 +15,75 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-class Changes(dict):
-    pass
-
-
-class ObjLockError(OmenError):
-    pass
-
-
 @dataclass
 class ObjMeta:
     lock = RLock()
     locked = False
-    changes = Changes()
     table: Optional["Table"] = None
 
 
-# noinspection PyCallingNonCallable
+# noinspection PyCallingNonCallable,PyProtectedMember
 class ObjBase:
-    __registry = set()
-    __frozen = False
-    __lock = None
+    # objects have 2 non-private attributes that can be overridden
+    _pk: Set[str] = ()  # list of field names in the db used as the primary key
+    _table_type: Type["Table"]  # class derived from Table
 
-    # objects have 3 non-private attributes
-    _pk: Set[str] = ()
+    # objects should only have 1 variable in __dict__
     _meta: ObjMeta = None
-    table_type: Type["Table"]
 
     def __eq__(self, obj):
-        return obj.to_pk() == self.to_pk()
+        return obj._to_pk() == self._to_pk()
 
     def __hash__(self):
         return hash(self._to_pk_tuple())
 
     def _to_pk_tuple(self):
-        return tuple(sorted(self.to_pk().items()))
-
-    @classmethod
-    def __init_subclass__(cls):
-        ObjBase.__registry.add(cls)
+        return tuple(sorted(self._to_pk().items()))
 
     def __init__(self, **kws):
+        """Override this to control initialization, generally calling it *after* you do your own init."""
         self._meta = ObjMeta()
         self._meta.lock = RLock()
-        self._meta.changes = Changes()
 
-        assert self._pk
+        # you normally set these in the base class
+        assert self._pk, "All classes must have a _pk"
+        assert self._table_type, "All classes must have a table_type"
 
-        self.check_kws(kws)
+        self._check_kws(kws)
 
-    def check_kws(self, dct):
+    @classmethod
+    def _from_db(cls, dct):
+        """Override this if you want to change how deserialization works."""
+        return cls(**dct)
+
+    def _check_kws(self, dct):
         for k in dct:
             if k not in self.__dict__:
                 raise AttributeError(
                     "%s not a valid column in %s" % (k, self.__class__.__name__)
                 )
 
-    def matches(self, dct):
+    def _matches(self, dct):
         for k, v in dct.items():
             if getattr(self, k) != v:
                 return False
         return True
 
-    @classmethod
-    def from_db(cls, dct):
-        return cls(**dct)
+    def _update(self, dct):
+        self.__dict__.update(dct)
 
     def _bind(self, table: "Table" = None, manager: "Omen" = None):
         if table is None:
-            table = getattr(manager, self.table_type.table_name)
+            table = getattr(manager, self._table_type.table_name)
         self._meta.table = table
 
-    def to_dict(self, keys=None):
+    def _to_dict(self, keys=None):
         """Get dict of serialized data from self."""
         ret = {}
         for k, v in self.__dict__.items():
             if k[0] == "_":
                 continue
-            if k not in self.table_type.field_names:
+            if k not in self._table_type.field_names:
                 continue
             if keys and k not in keys:
                 continue
@@ -103,14 +94,17 @@ class ObjBase:
                 ret[k] = v
         return ret
 
-    def to_pk(self):
+    def _to_pk(self):
         """Get dict of serialized data from self, but pk elements only."""
-        return self.to_dict(self._pk)
+        return self._to_dict(self._pk)
 
-    @classmethod
-    def from_row(cls: Type["ObjType"], row) -> "ObjType":
-        """Make new object from dict of serialized data."""
-        return cls.from_db(row.__dict__)
+    def _need_id(self):
+        need_id_field = None
+        for field in self._pk:
+            if getattr(self, field, None) is None:
+                assert not need_id_field
+                need_id_field = field
+        return need_id_field
 
     def __setattr__(self, k, v):
         if k[0] == "_":
@@ -125,7 +119,6 @@ class ObjBase:
         super().__setattr__(k, v)
 
     def _commit(self):
-        self.__dict__.update(self._meta.changes.__dict__)
         if self._meta.table:
             self._save()
         for val in self.__dict__.values():
@@ -133,26 +126,32 @@ class ObjBase:
                 val.commit(self._meta.table.manager)
 
     def _save(self):
-        self._meta.table.update(self)
+        need_id_field = self._need_id()
+        table = self._meta.table
+        if need_id_field:
+            table.insert(self, need_id_field)
+        else:
+            table.update(self)
 
     def _rollback(self):
-        self._meta.changes.clear()
+        pk = self._to_pk()
+        self._update(self._meta.table.select_one(**pk))
 
     def __enter__(self):
-        if not self._meta.table:
-            raise OmenError("with: protocol should not be used for unbound objects")
-        self._meta.lock.acquire()
-        self._meta.locked = True
+        if self._meta and not self._meta.table:
+            self._meta.lock.acquire()
+            self._meta.locked = True
         return self
 
     def __exit__(self, typ, val, ex):
+        # unbound objects aren't locked, and don't need the with: protocol
+        if not self._meta or not self._meta.table:
+            return
+
         if typ:
-            self._meta.changes.clear()
+            self._rollback()
         else:
             self._commit()
 
         self._meta.locked = False
         self._meta.lock.release()
-
-
-ObjType = TypeVar("ObjType", bound=ObjBase)

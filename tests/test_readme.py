@@ -7,7 +7,8 @@ from notanorm import SqliteDb
 
 from tests.schema import MyOmen
 
-MyOmen.codegen()
+# by calling force, code will always be regenerated... otherwise it's only regenerated if the import fails
+MyOmen.codegen(force=True)
 
 import tests.schema_gen as gen_objs
 

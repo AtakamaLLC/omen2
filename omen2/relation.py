@@ -57,7 +57,7 @@ class Relation(Generic[T]):
                 if obj not in self.__saved:
                     yield obj
         for obj in self.__saved:
-            if obj.matches(where):
+            if obj._matches(where):
                 yield obj
 
     def _link_obj(self, obj):

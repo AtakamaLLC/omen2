@@ -10,7 +10,7 @@ from notanorm import DbBase, SqliteDb, errors as err, DbType, DbModel
 from typing import Any, Optional, Dict, Type, Set
 
 from omen2.errors import OmenMoreThanOneError
-from omen2.object import ObjBase, ObjType
+from omen2.object import ObjBase
 from omen2.codegen import CodeGen
 
 
@@ -65,9 +65,11 @@ def default_type(typ: DbType) -> Any:
     raise ValueError("unknown type: %s" % typ)
 
 
-# noinspection PyMethodMayBeStatic
+# noinspection PyMethodMayBeStatic,PyProtectedMember
 class Omen(abc.ABC):
     """Object relational manager: read and write objects from a db."""
+
+    # pylint: disable=protected-access
 
     # abstract classes often do this, so # pylint: disable=no-self-use
 
@@ -108,10 +110,10 @@ class Omen(abc.ABC):
             assert tab.table_name == name
             assert issubclass(tab.row_type, ObjBase)
             assert getattr(tab.row_type, "_pk")
-            assert tab.row_type.table_type is tab
+            assert tab.row_type._table_type is tab
 
     @classmethod
-    def codegen(cls):
+    def codegen(cls, force=False):
         """Generate code derived from my model, and put it next to my __file__."""
         if cls.__module__ == "__main__":
             module, _ = os.path.splitext(
@@ -123,8 +125,10 @@ class Omen(abc.ABC):
         module += "_gen"
 
         try:
+            if force:
+                raise ImportError
             generated = importlib.import_module(module)
-        except ImportError:
+        except (ImportError, SyntaxError):
             CodeGen.generate_from_class(cls)
             generated = importlib.import_module(module)
 
@@ -195,11 +199,11 @@ class Table:
     # pylint: disable=dangerous-default-value, protected-access
 
     table_name: str
-    row_type: ObjType
+    row_type: ObjBase
     field_names: Set[str]
 
     def __init_subclass__(cls, **_kws):
-        cls.row_type.table_type = cls
+        cls.row_type._table_type = cls
 
     def __init__(self, mgr):
         self.manager = mgr
@@ -219,29 +223,26 @@ class Table:
     def remove(self, obj: ObjBase):
         """Remove an object from the db."""
         self.__cache.pop(obj._to_pk_tuple(), None)
-        vals = obj.to_pk()
+        vals = obj._to_pk()
         self.db.delete(**vals)
 
     def update(self, obj: "ObjBase"):
-        """Update the db from an object"""
+        """Add object to db + cache"""
         self.__cache[obj._to_pk_tuple()] = obj
-        obj._bind(table=self)
-        vals = obj.to_dict()
-        need_id_field = None
-        for field in obj._pk:
-            if getattr(obj, field, None) is None:
-                assert not need_id_field
-                need_id_field = field
-        if need_id_field:
-            ret = self.db.insert(self.table_name, **vals)
-            with obj:
-                setattr(obj, need_id_field, ret.lastrowid)
-        else:
-            self.db.upsert(self.table_name, **vals)
+        vals = obj._to_dict()
+        self.db.upsert(self.table_name, **vals)
+
+    def insert(self, obj: "ObjBase", id_field):
+        """Update the db + cache from object."""
+        self.__cache[obj._to_pk_tuple()] = obj
+        vals = obj._to_dict()
+        ret = self.db.insert(self.table_name, **vals)
+        with obj:
+            setattr(obj, id_field, ret.lastrowid)
 
     def __select(self, where):
         for row in self.db.select(self.table_name, None, where):
-            obj = self.row_type.from_db(row.__dict__)
+            obj = self.row_type._from_db(row.__dict__)
             obj = self.__cache.get(obj._to_pk_tuple(), obj)
             obj._bind(table=self)
             yield obj
