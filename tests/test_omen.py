@@ -1,6 +1,5 @@
 import gc
 import logging as log
-import time
 from contextlib import suppress
 from multiprocessing.pool import ThreadPool
 

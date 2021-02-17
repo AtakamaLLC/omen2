@@ -91,7 +91,8 @@ class Table:
         itr = self.select(where, **kws)
         return self._return_one(itr)
 
-    def _return_one(self, itr):
+    @staticmethod
+    def _return_one(itr):
         try:
             one = next(itr)
         except StopIteration:
