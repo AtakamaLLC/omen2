@@ -33,11 +33,16 @@ class MyOmen(Omen):
         # use an omen2-compatible schema, which is a semicolon-delimited create statement
         return """create table cars(id integer primary key, color text not null, gas_level double default 1.0);
                   create table doors(carid integer, type text, primary key (carid, type));"""
+        
+        # alternatively, return a list of type-annotated classes derived from ObjBase
 
     def migrate(db, version):
         # you should create a migration for each version
         assert False
 
+# you don't have to codegen, you can also just derive from omen2.ObjBase
+# but you have to match your database system to the model one way or another
+# either manual, codegen, or dbgen
 MyOmen.codegen()
 
 # assuming this is example.py
@@ -50,21 +55,13 @@ class Car(gen_objs.cars_row):
         self.doors = gen_objs.doors_relation(self, kws.pop("doors", None), carid=lambda: self.id)
         super().__init__(color=color, **kws)
 
-    def __create__(self):
-        # called when a new, empty car is created, but not when one is loaded from a row
-        # defaults from the db should be preloaded
-        assert self.gas_level == 1.0
-
-        # but you can add your own
-        self.color = "default black"
-
     @property
     def gas_pct(self):
         # read only props are fine
         return self.gas_level * 100
 
 
-# every db table has a type, you can derive from it
+# if you're using code generation, every db table has a type, you can derive from it
 class Cars(gen_objs.cars):
     # feel free to redefine the row_type used
     row_type = Car
