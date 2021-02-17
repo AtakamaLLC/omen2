@@ -101,6 +101,7 @@ class Omen(abc.ABC):
             setattr(self, name, table_type(self))
 
     def validate_model(self):
+        """Validate my model."""
         # codegen should be optional, so validate that the models match up
         for name, tab in self.table_types.items():
             assert issubclass(tab, Table)
@@ -111,6 +112,7 @@ class Omen(abc.ABC):
 
     @classmethod
     def codegen(cls):
+        """Generate code derived from my model, and put it next to my __file__."""
         if cls.__module__ == "__main__":
             module, _ = os.path.splitext(
                 os.path.basename(sys.modules["__main__"].__file__)
@@ -172,15 +174,19 @@ class Omen(abc.ABC):
     @classmethod
     @abc.abstractmethod
     def schema(cls, version):
+        """Override this to return a schema for a given version."""
         ...
 
     def migrate(self, db, version):
+        """Override this to support migration."""
         raise NotImplementedError
 
     def restore(self, backup_info: Any):
+        """Override this to support backup and recovery during migration."""
         raise NotImplementedError
 
     def backup(self) -> Any:
+        """Override this to support backup and recovery during migration."""
         return object()
 
 
@@ -204,20 +210,20 @@ class Table:
         return self.manager.db
 
     def add(self, obj):
-        """Insert an object into the db, object must support to_dict()."""
+        """Insert an object into the db"""
         self.__cache[obj._to_pk_tuple()] = obj
         obj._bind(table=self)
         obj._commit()
         return obj
 
     def remove(self, obj: ObjBase):
-        """Insert an object into the db, object must support to_dict()."""
+        """Remove an object from the db."""
         self.__cache.pop(obj._to_pk_tuple(), None)
         vals = obj.to_pk()
         self.db.delete(**vals)
 
     def update(self, obj: "ObjBase"):
-        """Update the db from an object, object must support to_dict()."""
+        """Update the db from an object"""
         self.__cache[obj._to_pk_tuple()] = obj
         obj._bind(table=self)
         vals = obj.to_dict()

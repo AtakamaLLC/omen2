@@ -11,6 +11,11 @@ if TYPE_CHECKING:
 
 class CodeGen:
     def __init__(self, module_path):
+        """Create an omen2 codegen object.
+
+        Args:
+            module_path: packa.module.ClassName
+        """
         self.path = module_path
         self.package, self.module, self.class_name = self.parse_class_path(self.path)
         if self.module == "__main__":
@@ -29,6 +34,13 @@ class CodeGen:
 
     @staticmethod
     def gen_class(out, name, dbtab: "DbTable"):
+        """Generate the derived classes for a single DBTable
+
+        Args:
+            out: file stream
+            name: table name
+            dbtab: table model
+        """
         # pylint: disable=import-outside-toplevel
         from omen2.omen import default_type
 
@@ -77,6 +89,10 @@ class CodeGen:
         print("    table_type = " + name, file=out)
 
     def output_path(self):
+        """Get the codegen output path.
+
+        Example: <module-path>_gen.py
+        """
         package, module, _cls = self.parse_class_path(self.path)
         packmod = ".".join(n for n in (package, module) if n)
         path = packmod.replace(".", "/") + "_gen.py"
@@ -84,6 +100,7 @@ class CodeGen:
 
     @staticmethod
     def gen_import(out):
+        """Generate import statements."""
         print(
             "from omen2 import ObjBase, Table, Relation",
             file=out,
@@ -94,6 +111,7 @@ class CodeGen:
         )
 
     def gen_monolith(self, out):
+        """Generates a single, monolithic file with all classes in one file."""
         self.gen_import(out)
 
         for name, dbtab in self.model.items():
@@ -105,6 +123,7 @@ class CodeGen:
 
     @staticmethod
     def parse_class_path(path):
+        """Parse the package.module.ClassName path."""
         sys.path = [os.getcwd()] + sys.path
         parts = path.split(".")
         cls = parts[-1]
@@ -113,6 +132,7 @@ class CodeGen:
         return package, module, cls
 
     def import_mod(self):
+        """Import the module this codegen refers to."""
         pack_mod = ".".join(n for n in (self.package, self.module) if n)
         if pack_mod in sys.modules:
             module = sys.modules[pack_mod]
@@ -123,16 +143,20 @@ class CodeGen:
 
     @staticmethod
     def generate_from_class(class_type):
+        """Given a class derived from omen2.Omen, generate omen2 code."""
         class_path = class_type.__module__ + "." + class_type.__name__
         CodeGen.generate_from_path(class_path)
 
     @staticmethod
     def generate_from_path(class_path):
+        """Given a dotted python path name, generate omen2 code."""
         cg = CodeGen(class_path)
+
         out_path = cg.output_path()
         tmp_path = out_path + ".tmp"
         with open(tmp_path, "w") as outf:
             cg.gen_monolith(outf)
+
         os.replace(tmp_path, out_path)
 
 
