@@ -2,6 +2,7 @@ import keyword
 import os
 import sys
 import importlib
+import importlib.util
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -12,6 +13,10 @@ class CodeGen:
     def __init__(self, module_path):
         self.path = module_path
         self.package, self.module, self.class_name = self.parse_class_path(self.path)
+        if self.module == "__main__":
+            self.module, _ = os.path.splitext(
+                os.path.basename(sys.modules["__main__"].__file__)
+            )
         self.base_cls = self.import_mod()
         self.model = self.base_cls.model
 
@@ -71,13 +76,10 @@ class CodeGen:
         print("class " + name + "_relation(Relation[" + name + "_row]):", file=out)
         print("    table_type = " + name, file=out)
 
-    def output_path(self, source_file=None):
-        if source_file:
-            path, _ = os.path.splitext(source_file)
-            path += "_gen.py"
-            return path
+    def output_path(self):
         package, module, _cls = self.parse_class_path(self.path)
-        path = (package + "." + module).replace(".", "/") + "_gen.py"
+        packmod = ".".join(n for n in (package, module) if n)
+        path = packmod.replace(".", "/") + "_gen.py"
         return path
 
     @staticmethod
@@ -111,20 +113,23 @@ class CodeGen:
         return package, module, cls
 
     def import_mod(self):
-        module = importlib.import_module("." + self.module, self.package)
+        pack_mod = ".".join(n for n in (self.package, self.module) if n)
+        if pack_mod in sys.modules:
+            module = sys.modules[pack_mod]
+        else:
+            module = "." + self.module if self.package else self.module
+            module = importlib.import_module(module, self.package)
         return getattr(module, self.class_name)
 
     @staticmethod
     def generate_from_class(class_type):
         class_path = class_type.__module__ + "." + class_type.__name__
-        CodeGen.generate_from_path(
-            class_path, sys.modules[class_type.__module__].__file__
-        )
+        CodeGen.generate_from_path(class_path)
 
     @staticmethod
-    def generate_from_path(class_path, source_file=None):
+    def generate_from_path(class_path):
         cg = CodeGen(class_path)
-        out_path = cg.output_path(source_file)
+        out_path = cg.output_path()
         tmp_path = out_path + ".tmp"
         with open(tmp_path, "w") as outf:
             cg.gen_monolith(outf)

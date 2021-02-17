@@ -8,10 +8,10 @@ omen2 allows the user to:
  - serialize created objects to the db
  - query the db and return objects, not rows
  - query for related objects
- - access objects across multiple threads
- - lock objects across multiple threads
+ - access/lock/update signleton objects across multiple threads
  - roll back changes on exceptions
  - create objects not-bound to the db, and later, bind them
+ - cache objects in use, flexible cache-control
 
 omen2 is not fully flexible with regards to database structure:
 
@@ -19,7 +19,7 @@ omen2 is not fully flexible with regards to database structure:
 
 
 ```python
-from omen2 import SqliteDb 
+from notanorm import SqliteDb
 from omen2 import Omen
 
 class MyOmen(Omen):
@@ -31,13 +31,17 @@ class MyOmen(Omen):
         assert version == 2
 
         # use an omen2-compatible schema, which is a semicolon-delimited create statement
-        return "create table cars(id integer primary key, color text not null, gas_level double default 1.0);
-                create table doors(carid integer, type text, primary key (carid, type));"
+        return """create table cars(id integer primary key, color text not null, gas_level double default 1.0);
+                  create table doors(carid integer, type text, primary key (carid, type));"""
 
     def migrate(db, version):
         # you should create a migration for each version
         assert False
 
+MyOmen.codegen()
+
+# assuming this is example.py
+import example_gen as gen_objs
 
 # every table has a row_type, you can derive from it
 class Car(gen_objs.cars_row):
@@ -53,7 +57,7 @@ class Car(gen_objs.cars_row):
 
         # but you can add your own
         self.color = "default black"
-        
+
     @property
     def gas_pct(self):
         # read only props are fine
@@ -61,13 +65,12 @@ class Car(gen_objs.cars_row):
 
 
 # every db table has a type, you can derive from it
-class Cars(MyOmen.cars):
+class Cars(gen_objs.cars):
     # feel free to redefine the row_type used
     row_type = Car
- 
 
-fname = "test.txt"
-db = SqliteDb(fname)
+
+db = SqliteDb(":memory:")
 
 # upon connection to a database, this will do migration, or creation as needed
 mgr = MyOmen(db, cars=Cars)
@@ -93,13 +96,12 @@ mgr.cars.add(Car(color="red", gas_level=0.3, doors=[gen_objs.doors_row(type=str(
 
 assert sum(1 for _ in mgr.cars.select(color="red")) == 2    # 2
 
-log.info("cars: %s", list(mgr.cars.select(color="red")))
+print("cars:", list(mgr.cars.select(color="red")))
 
 car = mgr.cars.select_one(color="red", gas_level=0.3)
 
 with car:
     car.gas_level = 0.9
 
-# doors are inserted
 assert len(car.doors) == 4
-
+```

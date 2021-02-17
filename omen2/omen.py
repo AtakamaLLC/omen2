@@ -2,6 +2,8 @@
 
 import abc
 import importlib
+import os
+import sys
 import weakref
 
 from notanorm import DbBase, SqliteDb, errors as err, DbType, DbModel
@@ -69,17 +71,20 @@ class Omen(abc.ABC):
 
     # abstract classes often do this, so # pylint: disable=no-self-use
 
+    generate_code = True
     version: Optional[int] = None
     model: DbModel = None
-    table_types: Dict[str, Type["Table"]] = {}
+    table_types: Dict[str, Type["Table"]] = None
 
     def __init_subclass__(cls, **_kws):
+        cls.table_types = {}
+
         if not cls.model:
             db = SqliteDb(":memory:")
             cls.__multi_query(db, cls.schema(cls.version))
             cls.model: DbModel = db.model()
 
-    def __init__(self, db: DbBase, migrate=True, codegen=True, **table_types):
+    def __init__(self, db: DbBase, migrate=True, **table_types):
         """Create a new manager with a db connection."""
         self.db = db
 
@@ -87,10 +92,7 @@ class Omen(abc.ABC):
             self._migrate_if_needed()
         self._create_if_needed()
 
-        self.table_types = table_types
-
-        if codegen:
-            self.codegen_support()
+        self.table_types.update(table_types)
 
         self.validate_model()
 
@@ -107,18 +109,27 @@ class Omen(abc.ABC):
             assert getattr(tab.row_type, "_pk")
             assert tab.row_type.table_type is tab
 
-    def codegen_support(self):
-        module = self.__class__.__module__ + "_gen"
+    @classmethod
+    def codegen(cls):
+        if cls.__module__ == "__main__":
+            module, _ = os.path.splitext(
+                os.path.basename(sys.modules["__main__"].__file__)
+            )
+        else:
+            module = cls.__module__
+
+        module += "_gen"
+
         try:
             generated = importlib.import_module(module)
         except ImportError:
-            CodeGen.generate_from_class(self.__class__)
+            CodeGen.generate_from_class(cls)
             generated = importlib.import_module(module)
 
         for name in generated.__all__:
             table_type = getattr(generated, name)
-            if name not in self.table_types:
-                self.table_types[name] = table_type
+            if name not in cls.table_types:
+                cls.table_types[name] = table_type
 
     @staticmethod
     def __multi_query(db, sql):
@@ -130,7 +141,13 @@ class Omen(abc.ABC):
             db.query(q)
 
     def _create_if_needed(self):
-        if not self.db.model() == self.model:
+        mod1 = self.db.model()
+        mod2 = self.model
+        mod1.pop("_omen", None)
+        mod2.pop("_omen", None)
+        if not mod1 == mod2:
+            print(self.db.model())
+            print(self.model)
             self.__multi_query(self.db, self.schema(self.version))
 
     def _migrate_if_needed(self):

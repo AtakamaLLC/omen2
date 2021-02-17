@@ -5,17 +5,9 @@ from multiprocessing.pool import ThreadPool
 import pytest
 from notanorm import SqliteDb
 
-from omen2.codegen import CodeGen
-
 from tests.schema import MyOmen
 
-
-def code_regen():
-    CodeGen.generate_from_class(MyOmen)
-
-
-# this has to happen before the import below
-code_regen()
+MyOmen.codegen()
 
 import tests.schema_gen as gen_objs
 
