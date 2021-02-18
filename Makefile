@@ -11,7 +11,7 @@ lint:
 	black omen2
 
 test:
-	pytest --cov notanorm -v tests
+	pytest --cov omen2 -v tests
 
 publish:
 	rm -rf dist
