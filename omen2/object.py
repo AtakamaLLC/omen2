@@ -47,6 +47,9 @@ class ObjBase:
     def _to_pk_tuple(self):
         return tuple(sorted(self._to_pk().items()))
 
+    def __lt__(self, other: "ObjBase"):
+        return self._to_pk_tuple() < other._to_pk_tuple()
+
     def __init__(self, **kws):
         """Override this to control initialization, generally calling it *after* you do your own init."""
         self._meta = ObjMeta()

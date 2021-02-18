@@ -152,13 +152,14 @@ def test_cache():
     db = SqliteDb(":memory:")
     # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
+    orig = mgr.cars
     cars = ObjCache(mgr.cars)
 
     # replace the table with a cache
     mgr.cars = cars
     mgr.cars.add(Car(gas_level=2, color="green"))
     mgr.cars.add(Car(gas_level=3, color="green"))
-    assert mgr.cars._cache
+    assert orig._cache
 
     mgr.db.insert("cars", id=99, gas_level=99, color="green")
     mgr.db.insert("cars", id=98, gas_level=98, color="green")
@@ -180,7 +181,48 @@ def test_cache():
 
     assert cars.reload() == 4
 
-    log.debug(cars._cache)
+    log.debug(orig._cache)
 
     # until now
     assert cars.select_one(id=98)
+
+
+def test_iter_and_sort():
+    db = SqliteDb(":memory:")
+    # upon connection to a database, this will do migration, or creation as needed
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars.add(Car(gas_level=2, color="green"))
+    car = mgr.cars.add(Car(gas_level=3, color="green"))
+    with car:
+        car.doors.add(gen_objs.doors_row(type="z"))
+        car.doors.add(gen_objs.doors_row(type="x"))
+
+    # tables, caches and relations are all sortable, and iterable
+    for door in car.doors:
+        assert door
+    sorted(car.doors)
+    sorted(mgr.cars)
+
+    cars = ObjCache(mgr.cars)
+    mgr.cars = cars
+    sorted(mgr.cars)
+
+
+def test_race_sync(tmp_path):
+    fname = str(tmp_path / "test.txt")
+    db = SqliteDb(fname)
+    mgr = MyOmen(db, cars=Cars)
+    ids = []
+
+    def insert(i):
+        h = mgr.cars.row_type(gas_level=i)
+        mgr.cars.add(h)
+        ids.append(h.id)
+
+    num = 10
+    pool = ThreadPool(10)
+    t = {}
+
+    pool.map(insert, range(num))
+
+    assert mgr.cars.count() == num

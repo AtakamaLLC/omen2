@@ -73,3 +73,6 @@ class Relation(Generic[T]):
             with item:
                 self._link_obj(item)
         self.__saved.clear()
+
+    def __iter__(self):
+        return self.select()

@@ -27,9 +27,9 @@ class Table:
 
     def add(self, obj):
         """Insert an object into the db"""
-        self._add_cache(obj)
         obj._bind(table=self)
         obj._commit()
+        self._add_cache(obj)
         return obj
 
     def remove(self, obj: ObjBase):
@@ -53,8 +53,9 @@ class Table:
         self._add_cache(obj)
         vals = obj._to_dict()
         ret = self.db.insert(self.table_name, **vals)
-        with obj:
-            setattr(obj, id_field, ret.lastrowid)
+        # force id's in there
+        if id_field:
+            obj.__dict__[id_field] = ret.lastrowid
 
     def db_select(self, where):
         return self.db.select(self.table_name, None, where)
@@ -80,6 +81,9 @@ class Table:
         """Read objects of specified class."""
         kws.update(where)
         yield from self.__select(kws)
+
+    def __iter__(self):
+        return self.select()
 
     def count(self, where={}, **kws):
         """Return count of objs matchig where clause."""
@@ -128,3 +132,6 @@ class ObjCache:
 
     def reload(self):
         return sum(1 for _ in self.table.select())
+
+    def __iter__(self):
+        return self.select()
