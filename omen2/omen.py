@@ -76,7 +76,7 @@ class Omen(abc.ABC):
         for name, values in data_set.items():
             tab: Table = getattr(self, name)
             for entry in values:
-                tab.add(tab.row_type(**entry))
+                tab.add(tab.row_type._from_db(entry))
 
     def dump_dict(self) -> Dict[str, Iterable[Dict[str, Any]]]:
         ret = {}

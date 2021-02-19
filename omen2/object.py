@@ -69,7 +69,7 @@ class ObjBase:
         for k in dct:
             if k not in self.__dict__:
                 raise AttributeError(
-                    "%s not a valid column in %s" % (k, self.__class__.__name__)
+                    "%s not a known attribute of %s" % (k, self.__class__.__name__)
                 )
 
     def _matches(self, dct):

@@ -1,3 +1,4 @@
+import base64
 import gc
 import logging as log
 from contextlib import suppress
@@ -294,4 +295,59 @@ def test_inline_omen_no_codegen():
     assert list(data_set.keys()) == list(mgr.table_types)
     mgr.load_dict(data_set)
     dumped = mgr.dump_dict()
-    assert dumped == {"basic": [{"id": 1, "data": 3}]}
+    assert dumped == data_set
+
+
+def test_override_for_keywords():
+    class Harbinger(Omen):
+        @classmethod
+        def schema(cls, version):
+            return "create table ents (id integer primary key, while, for, blob)"
+
+    db = SqliteDb(":memory:")
+
+    class Ent(ObjBase):
+        _pk = ("id",)
+
+        def __init__(self, *, id=None, while_=None, for_=None, blob=None, **kws):
+            self.id = id
+            self.while_ = while_
+            self.for_ = for_
+            self.blob = blob
+            super().__init__(**kws)
+
+        def _to_dict(self):
+            return {
+                "id": self.id,
+                "while": self.while_,
+                "for": self.for_,
+                "blob": base64.b64encode(self.blob).decode(),
+            }
+
+        @classmethod
+        def _from_db(cls, dct):
+            kws = {
+                "id": dct["id"],
+                "while_": dct["while"],
+                "for_": dct["for"],
+                "blob": dct["blob"],
+            }
+            return Ent(**kws)
+
+    class Ents(Table):
+        row_type = Ent
+
+    mgr = Harbinger(db, ents=Ents)
+
+    # simple database self-test
+
+    data_set = {
+        "ents": [
+            {"id": b"1234", "while": 1, "for": 3, "blob": base64.b64encode(b"1234")}
+        ]
+    }
+
+    assert list(data_set.keys()) == list(mgr.table_types)
+    mgr.load_dict(data_set)
+    dumped = mgr.dump_dict()
+    assert dumped == data_set
