@@ -29,7 +29,6 @@ class Table:
         """Insert an object into the db"""
         obj._bind(table=self)
         obj._commit()
-        self._add_cache(obj)
         return obj
 
     def remove(self, obj: ObjBase):
@@ -50,12 +49,12 @@ class Table:
 
     def insert(self, obj: "ObjBase", id_field):
         """Update the db + cache from object."""
-        self._add_cache(obj)
         vals = obj._to_dict()
         ret = self.db.insert(self.table_name, **vals)
         # force id's in there
         if id_field:
             obj.__dict__[id_field] = ret.lastrowid
+        self._add_cache(obj)
 
     def db_select(self, where):
         return self.db.select(self.table_name, None, where)

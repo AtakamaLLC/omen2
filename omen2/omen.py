@@ -4,9 +4,10 @@ import abc
 import importlib
 import os
 import sys
+import logging as log
 
 from notanorm import DbBase, SqliteDb, DbType, DbModel
-from typing import Any, Optional, Dict, Type
+from typing import Any, Optional, Dict, Type, Iterable
 
 from .table import Table
 from .object import ObjBase
@@ -70,15 +71,41 @@ class Omen(abc.ABC):
         for name, table_type in self.table_types.items():
             setattr(self, name, table_type(self))
 
+    def load_dict(self, data_set: Dict[str, Iterable[Dict[str, Any]]]):
+        # load sample data into self
+        for name, values in data_set.items():
+            tab: Table = getattr(self, name)
+            for entry in values:
+                tab.add(tab.row_type(**entry))
+
+    def dump_dict(self) -> Dict[str, Iterable[Dict[str, Any]]]:
+        ret = {}
+        for name in self.table_types:
+            lst = []
+            tab: Table = getattr(self, name)
+            for obj in tab:
+                lst.append(obj._to_dict())
+            ret[name] = lst
+        return ret
+
     def validate_model(self):
         """Validate my model."""
         # codegen should be optional, so validate that the models match up
         for name, tab in self.table_types.items():
             assert issubclass(tab, Table)
+
+            if not getattr(tab, "table_name", None):
+                tab.table_name = name
             assert tab.table_name == name
+
             assert issubclass(tab.row_type, ObjBase)
-            assert getattr(tab.row_type, "_pk")
+            assert isinstance(getattr(tab.row_type, "_pk"), tuple)
             assert tab.row_type._table_type is tab
+
+            if not getattr(tab, "field_names", None):
+                log.debug("%s: default serialization field names used", name)
+                tab.field_names = {c.name for c in self.model[name].columns}
+            assert isinstance(tab.field_names, set)
 
     @classmethod
     def codegen(cls, force=False):

@@ -6,7 +6,8 @@ from multiprocessing.pool import ThreadPool
 import pytest
 from notanorm import SqliteDb
 
-from omen2.table import ObjCache
+from omen2 import Omen, ObjBase
+from omen2.table import ObjCache, Table
 from tests.schema import MyOmen
 
 # by calling force, code will always be regenerated... otherwise it's only regenerated if the import fails
@@ -263,3 +264,34 @@ def test_any_type():
     # mismatched types don't work
     assert not mgr.whatever.select_one(any="31")
     assert not mgr.whatever.select_one(any=b"str")
+
+
+def test_inline_omen_no_codegen():
+    class Harbinger(Omen):
+        @classmethod
+        def schema(cls, version):
+            return "create table basic (id integer primary key, data integer)"
+
+    db = SqliteDb(":memory:")
+
+    class Basic(ObjBase):
+        _pk = ("id",)
+
+        def __init__(self, *, id=None, data=None, **kws):
+            self.id = id
+            self.data = data
+            super().__init__(**kws)
+
+    class Basics(Table):
+        row_type = Basic
+
+    mgr = Harbinger(db, basic=Basics)
+
+    # simple database self-test
+
+    data_set = {"basic": [{"id": 1, "data": 3}]}
+
+    assert list(data_set.keys()) == list(mgr.table_types)
+    mgr.load_dict(data_set)
+    dumped = mgr.dump_dict()
+    assert dumped == {"basic": [{"id": 1, "data": 3}]}
