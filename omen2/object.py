@@ -102,7 +102,19 @@ class ObjBase:
         return ret
 
     def _to_pk(self):
-        """Get dict of serialized data from self, but pk elements only."""
+        """Get dict of serialized data from self, but pk elements only.
+
+        You will have to override this if you're overriding _to_db, and
+        any of the transformed values are part of your primary key.
+
+        Guaranteed compatible override would be:
+
+        def _to_pk(self):
+            dct = self._to_db()
+            return {k: dct[v] for k in self._pk}
+
+        The only reason this isn't used by default is efficiency.
+        """
         ret = {}
         for k in self._pk:
             v = self.__dict__[k]
