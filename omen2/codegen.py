@@ -51,7 +51,7 @@ class CodeGen:
             if index.primary and index.fields:
                 keys = index.fields
 
-        print("    _pk = {'" + "', '".join(keys) + "'}", file=out)
+        print("    _pk = ('" + "', '".join(keys) + "', )", file=out)
         print("", file=out)
         print("    def __init__(self, *, ", file=out, end="")
         for col in dbtab.columns:

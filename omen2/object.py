@@ -2,7 +2,7 @@
 
 import logging
 from threading import RLock
-from typing import Type, TYPE_CHECKING, Optional, Set
+from typing import Type, TYPE_CHECKING, Optional, Tuple
 
 from dataclasses import dataclass
 
@@ -26,7 +26,7 @@ class ObjMeta:
 # noinspection PyCallingNonCallable,PyProtectedMember
 class ObjBase:
     # objects have 2 non-private attributes that can be overridden
-    _pk: Set[str] = ()  # list of field names in the db used as the primary key
+    _pk: Tuple[str, ...] = ()  # list of field names in the db used as the primary key
     _table_type: Type["Table"]  # class derived from Table
 
     # objects should only have 1 variable in __dict__
@@ -50,15 +50,14 @@ class ObjBase:
     def __lt__(self, other: "ObjBase"):
         return self._to_pk_tuple() < other._to_pk_tuple()
 
+    def __init_subclass__(cls, **kwargs):
+        # you must set these in the base class
+        assert cls._pk, "All classes must have a _pk"
+
     def __init__(self, **kws):
         """Override this to control initialization, generally calling it *after* you do your own init."""
         self._meta = ObjMeta()
         self._meta.lock = RLock()
-
-        # you normally set these in the base class
-        assert self._pk, "All classes must have a _pk"
-        assert self._table_type, "All classes must have a table_type"
-
         self._check_kws(kws)
 
     @classmethod
