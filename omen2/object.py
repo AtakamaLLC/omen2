@@ -39,7 +39,7 @@ class ObjBase:
         return self.__class__.__name__ + "(" + str(self._to_pk()) + ")"
 
     def __str__(self):
-        return str(self._to_dict())
+        return str(self._to_db())
 
     def __hash__(self):
         return hash(self._to_pk_tuple())
@@ -86,7 +86,7 @@ class ObjBase:
             table = getattr(manager, self._table_type.table_name)
         self._meta.table = table
 
-    def _to_dict(self):
+    def _to_db(self):
         """Get dict of serialized data from self."""
         ret = {}
         for k, v in self.__dict__.items():

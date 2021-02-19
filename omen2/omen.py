@@ -84,7 +84,7 @@ class Omen(abc.ABC):
             lst = []
             tab: Table = getattr(self, name)
             for obj in tab:
-                lst.append(obj._to_dict())
+                lst.append(obj._to_db())
             ret[name] = lst
         return ret
 

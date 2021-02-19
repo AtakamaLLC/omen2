@@ -316,7 +316,7 @@ def test_override_for_keywords():
             self.blob = blob
             super().__init__(**kws)
 
-        def _to_dict(self):
+        def _to_db(self):
             return {
                 "id": self.id,
                 "while": self.while_,

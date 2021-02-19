@@ -40,7 +40,7 @@ class Table:
     def update(self, obj: "ObjBase"):
         """Add object to db + cache"""
         self._add_cache(obj)
-        vals = obj._to_dict()
+        vals = obj._to_db()
         self.db.upsert(self.table_name, **vals)
 
     def _add_cache(self, obj):
@@ -49,7 +49,7 @@ class Table:
 
     def insert(self, obj: "ObjBase", id_field):
         """Update the db + cache from object."""
-        vals = obj._to_dict()
+        vals = obj._to_db()
         ret = self.db.insert(self.table_name, **vals)
         # force id's in there
         if id_field:
@@ -64,8 +64,8 @@ class Table:
             obj = self.row_type._from_db(row.__dict__)
             cached: ObjBase = self._cache.get(obj._to_pk_tuple())
             if cached:
-                update = obj._to_dict()
-                already = cached._to_dict()
+                update = obj._to_db()
+                already = cached._to_db()
                 if update != already:
                     log.debug("updating %s from db", repr(obj))
                     with obj:
