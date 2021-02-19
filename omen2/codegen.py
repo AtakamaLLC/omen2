@@ -102,7 +102,7 @@ class CodeGen:
     def gen_import(out):
         """Generate import statements."""
         print(
-            "from omen2 import ObjBase, Table, Relation",
+            "from omen2 import ObjBase, Table, Relation, any_type",
             file=out,
         )
         print(

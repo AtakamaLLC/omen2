@@ -86,6 +86,10 @@ def test_readme(tmp_path):
         with pytest.raises(AttributeError, match=r".*gas.*"):
             car.gas = 0.9
         car.gas_level = 0.9
+        types = set()
+        for door in car.doors:
+            types.add(int(door.type))
+        assert types == set(range(4))
 
     # doors are inserted
     assert len(car.doors) == 4
@@ -226,3 +230,36 @@ def test_race_sync(tmp_path):
     pool.map(insert, range(num))
 
     assert mgr.cars.count() == num
+
+
+def test_blobs_and_floats():
+    blob = gen_objs.blobs_row
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.blobs.add(blob(oid=b"1234", data=b"1234", num=2.4))
+
+    # cache works
+    blob = mgr.blobs.select_one(oid=b"1234")
+    assert blob.data == b"1234"
+    assert blob.num == 2.4
+    with blob:
+        blob.data = b"2345"
+
+    blob = mgr.blobs.select_one(oid=b"1234")
+    assert blob.data == b"2345"
+
+
+def test_any_type():
+    whatever = gen_objs.whatever_row
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.whatever.add(whatever(any=31))
+    mgr.whatever.add(whatever(any="str"))
+
+    # cache works
+    assert mgr.whatever.select_one(any=31)
+    assert mgr.whatever.select_one(any="str")
+
+    # mismatched types don't work
+    assert not mgr.whatever.select_one(any="31")
+    assert not mgr.whatever.select_one(any=b"str")
