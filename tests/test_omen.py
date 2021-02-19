@@ -302,7 +302,7 @@ def test_override_for_keywords():
     class Harbinger(Omen):
         @classmethod
         def schema(cls, version):
-            return "create table ents (id integer primary key, while, for, blob)"
+            return "create table ents (id blob primary key, while, for, blob text)"
 
     db = SqliteDb(":memory:")
 
@@ -321,7 +321,7 @@ def test_override_for_keywords():
                 "id": self.id,
                 "while": self.while_,
                 "for": self.for_,
-                "blob": base64.b64encode(self.blob).decode(),
+                "blob": base64.b64encode(self.blob),
             }
 
         @classmethod
@@ -330,7 +330,7 @@ def test_override_for_keywords():
                 "id": dct["id"],
                 "while_": dct["while"],
                 "for_": dct["for"],
-                "blob": dct["blob"],
+                "blob": base64.b64decode(dct["blob"]),
             }
             return Ent(**kws)
 
