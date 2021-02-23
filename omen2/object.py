@@ -50,7 +50,7 @@ class ObjBase:
     def __lt__(self, other: "ObjBase"):
         return self._to_pk_tuple() < other._to_pk_tuple()
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **_kws):
         # you must set these in the base class
         assert cls._pk, "All classes must have a _pk"
 
