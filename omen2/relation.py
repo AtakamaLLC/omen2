@@ -61,17 +61,18 @@ class Relation(Generic[T]):
                 yield obj
 
     def _link_obj(self, obj):
-        for k, v in self._where.items():
-            if isinstance(v, Callable):
-                v = v()
-            setattr(obj, k, v)
+        obj._meta.table = self.table
+        with obj:
+            for k, v in self._where.items():
+                if isinstance(v, Callable):
+                    v = v()
+                setattr(obj, k, v)
 
     def commit(self, manager):
         for item in self.__saved:
             if not item._meta.table:
                 item._bind(manager=manager)
-            with item:
-                self._link_obj(item)
+            self._link_obj(item)
         self.__saved.clear()
 
     def __iter__(self):

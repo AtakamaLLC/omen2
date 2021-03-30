@@ -20,7 +20,9 @@ log = logging.getLogger(__name__)
 class ObjMeta:
     lock = RLock()
     locked = False
+    new = True
     table: Optional["Table"] = None
+    old_pk = None
 
 
 # noinspection PyCallingNonCallable,PyProtectedMember
@@ -54,16 +56,29 @@ class ObjBase:
         # you must set these in the base class
         assert cls._pk, "All classes must have a _pk"
 
-    def __init__(self, **kws):
+    def __init__(self, _from_db_row=False, **kws):
         """Override this to control initialization, generally calling it *after* you do your own init."""
         self._meta = ObjMeta()
         self._meta.lock = RLock()
+        self._meta.new = not _from_db_row
         self._check_kws(kws)
+        if not self._meta.new:
+            self._save_pk()
+
+    def _save_pk(self):
+        self._meta.old_pk = self._to_pk()
 
     @classmethod
     def _from_db(cls, dct):
         """Override this if you want to change how deserialization works."""
         return cls(**dct)
+
+    @classmethod
+    def _from_db_not_new(cls, dct):
+        """Override this if you want to change how deserialization works."""
+        ret = cls._from_db(dct)
+        ret._meta.new = False
+        return ret
 
     def _check_kws(self, dct):
         for k in dct:
@@ -89,16 +104,14 @@ class ObjBase:
     def _to_db(self):
         """Get dict of serialized data from self."""
         ret = {}
-        for k, v in self.__dict__.items():
-            if k[0] == "_":
+        for k in self._table_type.field_names:
+            v = getattr(self, k)
+            if v is None:
                 continue
-            if k not in self._table_type.field_names:
-                continue
-            if hasattr(v, "to_db"):
+            if hasattr(v, "_to_db"):
                 # pylint: disable=no-member
-                v = v.to_db()
-            if v is not None:
-                ret[k] = v
+                v = v._to_db()
+            ret[k] = v
         return ret
 
     def _to_pk(self):
@@ -153,10 +166,12 @@ class ObjBase:
     def _save(self):
         need_id_field = self._need_id()
         table = self._meta.table
-        if need_id_field:
+        if need_id_field or self._meta.new:
             table.insert(self, need_id_field)
         else:
             table.update(self)
+        self._meta.new = False
+        self._meta.old_pk = self._to_pk()
 
     def _rollback(self):
         pk = self._to_pk()

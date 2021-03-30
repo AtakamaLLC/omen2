@@ -6,6 +6,7 @@ from multiprocessing.pool import ThreadPool
 
 import pytest
 from notanorm import SqliteDb
+from notanorm.errors import IntegrityError
 
 from omen2 import Omen, ObjBase
 from omen2.table import ObjCache, Table
@@ -84,6 +85,8 @@ def test_readme(tmp_path):
 
     car = mgr.cars.select_one(color="red", gas_level=0.3)
 
+    assert not car._meta.new
+
     with car:
         with pytest.raises(AttributeError, match=r".*gas.*"):
             car.gas = 0.9
@@ -154,6 +157,15 @@ def test_rollback():
     assert car.gas_level == 2
 
 
+def test_nodup():
+    db = SqliteDb(":memory:")
+    # upon connection to a database, this will do migration, or creation as needed
+    mgr = MyOmen(db, cars=Cars)
+    car = mgr.cars.add(Car(gas_level=2))
+    with pytest.raises(IntegrityError):
+        mgr.cars.add(Car(id=car.id, gas_level=3))
+
+
 def test_cache():
     db = SqliteDb(":memory:")
     # upon connection to a database, this will do migration, or creation as needed
@@ -212,6 +224,27 @@ def test_iter_and_sort():
     cars = ObjCache(mgr.cars)
     mgr.cars = cars
     sorted(mgr.cars)
+
+
+def test_cascade_relations():
+    db = SqliteDb(":memory:")
+    # upon connection to a database, this will do migration, or creation as needed
+    mgr = MyOmen(db, cars=Cars)
+    car = mgr.cars.add(Car(id=1, gas_level=2, color="green"))
+    assert not car._meta.new
+
+    with car:
+        car.doors.add(gen_objs.doors_row(type="z"))
+        car.doors.add(gen_objs.doors_row(type="x"))
+
+    assert len(car.doors) == 2
+
+    with car:
+        car.id = 3
+
+    assert len(car.doors) == 2
+    assert mgr.cars.select_one(id=3)
+    assert not mgr.cars.select_one(id=1)
 
 
 def test_race_sync(tmp_path):

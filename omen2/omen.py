@@ -29,6 +29,8 @@ def default_type(typ: DbType) -> Any:
         return str
     if typ == DbType.BLOB:
         return bytes
+    if typ == DbType.BOOLEAN:
+        return bool
     if typ == DbType.DOUBLE:
         return float
     raise ValueError("unknown type: %s" % typ)

@@ -1,13 +1,19 @@
 import weakref
 from contextlib import suppress
-from typing import Set, Dict
+from typing import Set, Dict, Generic, Iterable, TypeVar, TYPE_CHECKING
 
 from .object import ObjBase
-from .errors import OmenMoreThanOneError, OmenNoPkError
+from .errors import OmenMoreThanOneError, OmenNoPkError, OmenDuplicateObjectError
 import logging as log
 
+if TYPE_CHECKING:
+    from omen2.omen import Omen
+
+T = TypeVar("T", bound=ObjBase)
+
+
 # noinspection PyDefaultArgument,PyProtectedMember
-class Table:
+class Table(Generic[T]):
     # pylint: disable=dangerous-default-value, protected-access
 
     table_name: str
@@ -15,9 +21,10 @@ class Table:
     field_names: Set[str]
 
     def __init_subclass__(cls, **_kws):
-        cls.row_type._table_type = cls
+        if hasattr(cls, "row_type"):
+            cls.row_type._table_type = cls
 
-    def __init__(self, mgr):
+    def __init__(self, mgr: "Omen"):
         self.manager = mgr
         self._cache: Dict[dict, ObjBase] = weakref.WeakValueDictionary()
 
@@ -25,29 +32,40 @@ class Table:
     def db(self):
         return self.manager.db
 
+    def new(self, *a, **kw):
+        obj = self.row_type(*a, **kw)
+        return self.add(obj)
+
     def add(self, obj):
         """Insert an object into the db"""
         obj._bind(table=self)
         obj._commit()
         return obj
 
-    def remove(self, obj: ObjBase):
+    def remove(self, obj: T):
         """Remove an object from the db."""
         self._cache.pop(obj._to_pk_tuple(), None)
         vals = obj._to_pk()
         self.db.delete(**vals)
 
-    def update(self, obj: "ObjBase"):
+    def update(self, obj: T):
         """Add object to db + cache"""
         self._add_cache(obj)
         vals = obj._to_db()
-        self.db.upsert(self.table_name, **vals)
+        if obj._meta.old_pk:
+            self.db.upsert(self.table_name, obj._meta.old_pk, **vals)
+        else:
+            self.db.upsert(self.table_name, **vals)
 
-    def _add_cache(self, obj):
+    def _add_cache(self, obj: T):
         with suppress(OmenNoPkError):
-            self._cache[obj._to_pk_tuple()] = obj
+            pk = obj._to_pk_tuple()
+        alr = self._cache.get(pk)
+        if alr is not None and alr is not obj:
+            raise OmenDuplicateObjectError
+        self._cache[pk] = obj
 
-    def insert(self, obj: "ObjBase", id_field):
+    def insert(self, obj: T, id_field):
         """Update the db + cache from object."""
         vals = obj._to_db()
         ret = self.db.insert(self.table_name, **vals)
@@ -59,9 +77,9 @@ class Table:
     def db_select(self, where):
         return self.db.select(self.table_name, None, where)
 
-    def __select(self, where):
+    def __select(self, where) -> Iterable[T]:
         for row in self.db_select(where):
-            obj = self.row_type._from_db(row.__dict__)
+            obj = self.row_type._from_db_not_new(row.__dict__)
             cached: ObjBase = self._cache.get(obj._to_pk_tuple())
             if cached:
                 update = obj._to_db()
@@ -80,6 +98,12 @@ class Table:
         """Read objects of specified class."""
         kws.update(where)
         yield from self.__select(kws)
+
+    def get(self, *args, **kws):
+        """Shortcut method, you can access object by pk/positional args."""
+        for i, v in enumerate(args):
+            kws[self.row_type._pk[i]] = v
+        return self.select_one(**kws)
 
     def __iter__(self):
         return self.select()

@@ -3,6 +3,7 @@ import os
 import sys
 import importlib
 import importlib.util
+import logging as log
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -60,7 +61,15 @@ class CodeGen:
             print(name_and_type, file=out, end="")
             if col.default or not col.notnull:
                 if col.default:
-                    defval = pytype(col.default)
+                    try:
+                        defval = pytype(col.default)
+                        log.warning(
+                            "not generating python default for %s=%s",
+                            col.name,
+                            col.default,
+                        )
+                    except ValueError:
+                        defval = None
                 else:
                     defval = None
                 print(" = " + str(defval), file=out, end="")
