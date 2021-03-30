@@ -52,8 +52,8 @@ class Table(Generic[T]):
         """Add object to db + cache"""
         self._add_cache(obj)
         vals = obj._to_db()
-        if obj._meta.old_pk:
-            self.db.upsert(self.table_name, obj._meta.old_pk, **vals)
+        if obj._meta.pk:
+            self.db.upsert(self.table_name, obj._meta.pk, **vals)
         else:
             self.db.upsert(self.table_name, **vals)
 

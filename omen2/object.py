@@ -22,6 +22,7 @@ class ObjMeta:
     locked = False
     new = True
     table: Optional["Table"] = None
+    pk = None
     restore = None
 
 
@@ -66,6 +67,7 @@ class ObjBase:
             self._save_pk()
 
     def _save_pk(self):
+        self._meta.pk = self._to_pk()
         self._meta.restore = self._to_db()
 
     @classmethod
@@ -156,12 +158,40 @@ class ObjBase:
             raise AttributeError("Attribute %s not defined" % k)
         super().__setattr__(k, v)
 
+    def _collect_cascade(self):
+        # cascading id changes to relations is expensive, and involves weird swaps
+        # but it seems like this should be rare behavior
+        # we save a list of all related objects here
+        # and then later, we go throught and update all of them
+        # because we don't know what the lambda-relationship is
+        cascade = {}
+        if self._meta.pk:
+            pk = self._to_pk()
+            if pk != self._meta.pk:
+                for k, v in self._meta.pk.items():
+                    setattr(self, k, v)
+                try:
+                    for val in self.__dict__.values():
+                        if isinstance(val, Relation):
+                            cascade[val] = list(val.select())
+                finally:
+                    for k, v in pk.items():
+                        setattr(self, k, v)
+        return cascade
+
     def _commit(self):
+        cascade = self._collect_cascade()
+
         if self._meta.table:
             self._save()
+
         for val in self.__dict__.values():
             if isinstance(val, Relation):
                 val.commit(self._meta.table.manager)
+
+        for rel, objs in cascade.items():
+            for obj in objs:
+                rel._link_obj(obj)
 
     def _save(self):
         need_id_field = self._need_id()
@@ -170,8 +200,9 @@ class ObjBase:
             table.insert(self, need_id_field)
         else:
             table.update(self)
+
         self._meta.new = False
-        self._meta.restore = self._to_db()
+        self._save_pk()
 
     def _rollback(self):
         pk = self._to_pk()
