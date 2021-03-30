@@ -22,7 +22,7 @@ class ObjMeta:
     locked = False
     new = True
     table: Optional["Table"] = None
-    old_pk = None
+    restore = None
 
 
 # noinspection PyCallingNonCallable,PyProtectedMember
@@ -66,7 +66,7 @@ class ObjBase:
             self._save_pk()
 
     def _save_pk(self):
-        self._meta.old_pk = self._to_pk()
+        self._meta.restore = self._to_db()
 
     @classmethod
     def _from_db(cls, dct):
@@ -171,7 +171,7 @@ class ObjBase:
         else:
             table.update(self)
         self._meta.new = False
-        self._meta.old_pk = self._to_pk()
+        self._meta.restore = self._to_db()
 
     def _rollback(self):
         pk = self._to_pk()
