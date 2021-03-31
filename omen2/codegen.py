@@ -63,13 +63,14 @@ class CodeGen:
                 if col.default:
                     try:
                         defval = pytype(col.default)
+                    except ValueError:
+                        defval = None
                         log.warning(
-                            "not generating python default for %s=%s",
+                            "not generating python default for %s.%s=%s",
+                            name,
                             col.name,
                             col.default,
                         )
-                    except ValueError:
-                        defval = None
                 else:
                     defval = None
                 print(" = " + str(defval), file=out, end="")

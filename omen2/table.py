@@ -1,24 +1,25 @@
 import weakref
 from contextlib import suppress
-from typing import Set, Dict, Generic, Iterable, TypeVar, TYPE_CHECKING
+from typing import Set, Dict, Iterable, TYPE_CHECKING, TypeVar, Generic
 
 from .object import ObjBase
-from .errors import OmenMoreThanOneError, OmenNoPkError, OmenDuplicateObjectError
+from .errors import OmenNoPkError, OmenDuplicateObjectError
 import logging as log
+
+from .selectable import Selectable
 
 if TYPE_CHECKING:
     from omen2.omen import Omen
 
 T = TypeVar("T", bound=ObjBase)
 
-
 # noinspection PyDefaultArgument,PyProtectedMember
-class Table(Generic[T]):
+class Table(Selectable[T]):
     # pylint: disable=dangerous-default-value, protected-access
 
     table_name: str
-    row_type: ObjBase
     field_names: Set[str]
+    allow_auto: bool = False
 
     def __init_subclass__(cls, **_kws):
         if hasattr(cls, "row_type"):
@@ -29,14 +30,15 @@ class Table(Generic[T]):
         self._cache: Dict[dict, ObjBase] = weakref.WeakValueDictionary()
 
     @property
-    def db(self):
+    def db(self) -> "Omen":
         return self.manager.db
 
-    def new(self, *a, **kw):
+    def new(self, *a, **kw) -> T:
+        """Convenience function to create a new row and add it to the db."""
         obj = self.row_type(*a, **kw)
         return self.add(obj)
 
-    def add(self, obj):
+    def add(self, obj) -> T:
         """Insert an object into the db"""
         obj._bind(table=self)
         obj._commit()
@@ -44,9 +46,17 @@ class Table(Generic[T]):
 
     def remove(self, obj: T):
         """Remove an object from the db."""
+        if not obj._meta or not obj._meta.table:
+            log.debug("not removing object that isn't in the db")
+            return
+        assert obj._meta.table is self
+        obj._remove()
+
+    def _remove(self, obj: T):
+        """Remove an object from the db, without cascading."""
         self._cache.pop(obj._to_pk_tuple(), None)
         vals = obj._to_pk()
-        self.db.delete(**vals)
+        self.db.delete(self.table_name, **vals)
 
     def update(self, obj: T):
         """Add object to db + cache"""
@@ -79,7 +89,7 @@ class Table(Generic[T]):
 
     def __select(self, where) -> Iterable[T]:
         for row in self.db_select(where):
-            obj = self.row_type._from_db_not_new(row.__dict__)
+            obj = self.row_type._from_db_not_new(row._asdict())
             cached: ObjBase = self._cache.get(obj._to_pk_tuple())
             if cached:
                 update = obj._to_db()
@@ -94,62 +104,35 @@ class Table(Generic[T]):
                 self._add_cache(obj)
             yield obj
 
-    def select(self, where={}, **kws):
+    def select(self, where={}, **kws) -> Iterable[T]:
         """Read objects of specified class."""
         kws.update(where)
         yield from self.__select(kws)
 
-    def get(self, *args, **kws):
-        """Shortcut method, you can access object by pk/positional args."""
-        for i, v in enumerate(args):
-            kws[self.row_type._pk[i]] = v
-        return self.select_one(**kws)
-
-    def __iter__(self):
-        return self.select()
-
-    def count(self, where={}, **kws):
+    def count(self, where={}, **kws) -> int:
         """Return count of objs matchig where clause."""
         kws.update(where)
         return self.db.count(self.table_name, kws)
 
-    def select_one(self, where={}, **kws):
-        """Return one row, None, or raises an OmenMoreThanOneError."""
-        itr = self.select(where, **kws)
-        return self._return_one(itr)
-
-    @staticmethod
-    def _return_one(itr):
-        try:
-            one = next(itr)
-        except StopIteration:
-            return None
-
-        try:
-            next(itr)
-            raise OmenMoreThanOneError
-        except StopIteration:
-            return one
-
 
 # noinspection PyDefaultArgument,PyProtectedMember
-class ObjCache:
+class ObjCache(Generic[T]):
     # pylint: disable=dangerous-default-value, protected-access
 
-    def __init__(self, table: Table):
+    def __init__(self, table: Table[T]):
         self.table = table
         self.table._cache = {}  # change the weak dict to a permanent dict
 
     def __getattr__(self, item):
         return getattr(self.table, item)
 
-    def select(self, where={}, **kws):
+    def select(self, where={}, **kws) -> Iterable[T]:
         kws.update(where)
         for v in self.table._cache.values():
             if v._matches(kws):
                 yield v
 
-    def select_one(self, where={}, **kws):
+    def select_one(self, where={}, **kws) -> T:
         itr = self.select(where, **kws)
         return self._return_one(itr)
 

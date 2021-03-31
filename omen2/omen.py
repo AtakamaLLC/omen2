@@ -73,6 +73,10 @@ class Omen(abc.ABC):
         for name, table_type in self.table_types.items():
             setattr(self, name, table_type(self))
 
+    def set_table_type(self, table_name, table_type):
+        self.table_types[table_name] = table_type
+        self.validate_table(table_name, table_type)
+
     def load_dict(self, data_set: Dict[str, Iterable[Dict[str, Any]]]):
         # load sample data into self
         for name, values in data_set.items():
@@ -90,24 +94,37 @@ class Omen(abc.ABC):
             ret[name] = lst
         return ret
 
+    def validate_table(self, name, tab):
+        assert issubclass(tab, Table)
+
+        if not getattr(tab, "table_name", None):
+            tab.table_name = name
+        assert tab.table_name == name
+
+        assert issubclass(tab.row_type, ObjBase)
+        assert isinstance(getattr(tab.row_type, "_pk"), tuple)
+        assert tab.row_type._table_type is tab
+
+        if not getattr(tab, "field_names", None):
+            log.debug("%s: default serialization field names used", name)
+            tab.field_names = {c.name for c in self.model[name].columns}
+        assert isinstance(tab.field_names, set)
+
+        pk = None
+        model = self.model[name]
+        for idx in model.indexes:
+            if idx.primary:
+                pk = idx.fields
+        if len(pk) == 1:
+            for fd in model.columns:
+                if fd.name == pk[0]:
+                    tab.allow_auto = fd.autoinc
+
     def validate_model(self):
         """Validate my model."""
         # codegen should be optional, so validate that the models match up
         for name, tab in self.table_types.items():
-            assert issubclass(tab, Table)
-
-            if not getattr(tab, "table_name", None):
-                tab.table_name = name
-            assert tab.table_name == name
-
-            assert issubclass(tab.row_type, ObjBase)
-            assert isinstance(getattr(tab.row_type, "_pk"), tuple)
-            assert tab.row_type._table_type is tab
-
-            if not getattr(tab, "field_names", None):
-                log.debug("%s: default serialization field names used", name)
-                tab.field_names = {c.name for c in self.model[name].columns}
-            assert isinstance(tab.field_names, set)
+            self.validate_table(name, tab)
 
     @classmethod
     def codegen(cls, force=False):

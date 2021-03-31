@@ -1,4 +1,6 @@
-from typing import TypeVar, Generic, Callable, Iterable, TYPE_CHECKING, List
+from typing import TypeVar, Callable, Iterable, TYPE_CHECKING, List
+
+from .selectable import Selectable
 
 if TYPE_CHECKING:
     from omen2 import ObjBase, Omen, Table
@@ -7,10 +9,14 @@ T = TypeVar("T")
 
 
 # noinspection PyProtectedMember,PyDefaultArgument
-class Relation(Generic[T]):
+class Relation(Selectable[T]):
     # pylint: disable=protected-access, dangerous-default-value
 
     table_type: "Table" = None
+
+    @property
+    def row_type(self):
+        return self.table_type.row_type
 
     def __init__(self, _from: "ObjBase", _init=None, **where):
         self._from = _from
@@ -68,7 +74,9 @@ class Relation(Generic[T]):
                     v = v()
                 setattr(obj, k, v)
 
-    def commit(self, manager):
+    def commit(self, manager=None):
+        if not manager:
+            manager = self.table.manager
         for item in self.__saved:
             if not item._meta.table:
                 item._bind(manager=manager)
