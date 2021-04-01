@@ -4,6 +4,7 @@ from .selectable import Selectable
 
 if TYPE_CHECKING:
     from omen2 import ObjBase, Omen, Table
+    from typing import Type
 
 T = TypeVar("T")
 
@@ -12,7 +13,7 @@ T = TypeVar("T")
 class Relation(Selectable[T]):
     # pylint: disable=protected-access, dangerous-default-value
 
-    table_type: "Table" = None
+    table_type: "Type[Table[T]]" = None
 
     @property
     def row_type(self):
@@ -37,7 +38,7 @@ class Relation(Selectable[T]):
     def table(self):
         if not self.__table:
             mgr: "Omen" = self._from._meta.table.manager
-            self.__table: "Table" = getattr(mgr, self.table_type.table_name)
+            self.__table: "Table" = mgr[self.table_type]
         return self.__table
 
     def add(self, obj: "ObjBase"):

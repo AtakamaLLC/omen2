@@ -100,7 +100,7 @@ class ObjBase:
 
     def _bind(self, table: "Table" = None, manager: "Omen" = None):
         if table is None:
-            table = getattr(manager, self._table_type.table_name)
+            table = manager[self._table_type]
         self._meta.table = table
 
     def _to_db(self):

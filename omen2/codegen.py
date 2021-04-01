@@ -84,8 +84,18 @@ class CodeGen:
 
         print(file=out)
 
+        print(
+            name
+            + "_row_type_var = TypeVar('"
+            + name
+            + "_row_type_var', bound="
+            + name
+            + "_row)",
+            file=out,
+        )
+
         print(file=out)
-        print("class " + name + "(Table):", file=out)
+        print("class " + name + "(Table[" + name + "_row_type_var]):", file=out)
         print('    table_name = "' + name + '"', file=out)
         print("    row_type = " + name + "_row", file=out)
         print(
@@ -112,11 +122,8 @@ class CodeGen:
     def gen_import(out):
         """Generate import statements."""
         print(
-            "from omen2 import ObjBase, Table, Relation, any_type",
-            file=out,
-        )
-        print(
-            "\n",
+            "from omen2 import ObjBase, Table, Relation, any_type\n"
+            "from typing import TypeVar\n",
             file=out,
         )
 

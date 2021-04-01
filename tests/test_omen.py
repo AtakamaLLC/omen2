@@ -10,6 +10,7 @@ from notanorm.errors import IntegrityError
 
 from omen2 import Omen, ObjBase
 from omen2.table import ObjCache, Table
+from omen2.errors import OmenNoPkError
 from tests.schema import MyOmen
 
 # by calling force, code will always be regenerated... otherwise it's only regenerated if the import fails
@@ -41,7 +42,7 @@ class Car(gen_objs.cars_row):
 
 
 # every db table has a type, you can derive from it
-class Cars(gen_objs.cars):
+class Cars(gen_objs.cars[Car]):
     # redefine the row_type used
     row_type = Car
 
@@ -51,7 +52,8 @@ def test_readme(tmp_path):
     db = SqliteDb(fname)
 
     # upon connection to a database, this will do migration, or creation as needed
-    mgr = MyOmen(db, cars=Cars)
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
 
     # by default, you can always iterate on tables
     assert mgr.cars.count() == 0
@@ -100,13 +102,15 @@ def test_readme(tmp_path):
     assert len(car.doors) == 4
 
 
+# noinspection PyUnresolvedReferences
 def test_weak_cache(caplog):
     # important to disable log capturing/reporting otherwise refs to car() could be out there!
     caplog.clear()
     caplog.set_level("ERROR")
 
     db = SqliteDb(":memory:")
-    mgr = MyOmen(db, cars=Cars)
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
     car = mgr.cars.add(Car(gas_level=0))
 
     # cache works
@@ -126,11 +130,12 @@ def test_weak_cache(caplog):
 def test_threaded():
     db = SqliteDb(":memory:")
     # upon connection to a database, this will do migration, or creation as needed
-    mgr = MyOmen(db, cars=Cars)
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
     car = mgr.cars.add(Car(gas_level=0))
     pool = ThreadPool(10)
 
-    def update_stuff(i):
+    def update_stuff(_i):
         with car:
             car.gas_level += 1
 
@@ -147,6 +152,7 @@ def test_rollback():
     db = SqliteDb(":memory:")
     # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
     car = mgr.cars.add(Car(gas_level=2))
 
     with suppress(ValueError):
@@ -157,19 +163,37 @@ def test_rollback():
     assert car.gas_level == 2
 
 
+def test_nopk():
+    db = SqliteDb(":memory:")
+    # upon connection to a database, this will do migration, or creation as needed
+    mgr = MyOmen(db, cars=Cars)
+    with pytest.raises(OmenNoPkError):
+        mgr[gen_objs.doors].add(gen_objs.doors_row(carid=None, type=None))
+
+
 def test_nodup():
     db = SqliteDb(":memory:")
     # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
-    car = mgr.cars.add(Car(gas_level=2))
+    car = mgr[Cars].add(Car(gas_level=2))
     with pytest.raises(IntegrityError):
-        mgr.cars.add(Car(id=car.id, gas_level=3))
+        mgr[Cars].add(Car(id=car.id, gas_level=3))
+
+
+def test_shortcut_syntax():
+    db = SqliteDb(":memory:")
+    # upon connection to a database, this will do migration, or creation as needed
+    mgr = MyOmen(db, cars=Cars)
+    car = mgr[Cars].new(gas_level=2)
+    assert car
+    assert db.select_one("cars")
 
 
 def test_cache():
     db = SqliteDb(":memory:")
     # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
+    mgr.cars = Cars(mgr)
     orig = mgr.cars
     cars = ObjCache(mgr.cars)
 
@@ -209,6 +233,7 @@ def test_iter_and_sort():
     db = SqliteDb(":memory:")
     # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
     mgr.cars.add(Car(gas_level=2, color="green"))
     car = mgr.cars.add(Car(gas_level=3, color="green"))
     with car:
@@ -230,6 +255,7 @@ def test_cascade_relations():
     db = SqliteDb(":memory:")
     # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
     car = mgr.cars.add(Car(id=1, gas_level=2, color="green"))
     assert not car._meta.new
 
@@ -251,6 +277,7 @@ def test_race_sync(tmp_path):
     fname = str(tmp_path / "test.txt")
     db = SqliteDb(fname)
     mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
     ids = []
 
     def insert(i):
@@ -260,47 +287,52 @@ def test_race_sync(tmp_path):
 
     num = 10
     pool = ThreadPool(10)
-    t = {}
 
     pool.map(insert, range(num))
 
     assert mgr.cars.count() == num
 
 
-def test_blobs_and_floats():
+def test_other_types():
     blob = gen_objs.blobs_row
     db = SqliteDb(":memory:")
     mgr = MyOmen(db)
-    mgr.blobs.add(blob(oid=b"1234", data=b"1234", num=2.4))
+    mgr.blobs = mgr[gen_objs.blobs]
+    mgr.blobs.add(blob(oid=b"1234", data=b"1234", num=2.4, boo=True))
 
     # cache works
     blob = mgr.blobs.select_one(oid=b"1234")
     assert blob.data == b"1234"
     assert blob.num == 2.4
+    assert blob.boo
     with blob:
         blob.data = b"2345"
+        blob.boo = False
 
     blob = mgr.blobs.select_one(oid=b"1234")
     assert blob.data == b"2345"
+    assert not blob.boo
 
 
 def test_any_type():
-    whatever = gen_objs.whatever_row
+    whatever = gen_objs.whatever
+    whatever_row = gen_objs.whatever_row
     db = SqliteDb(":memory:")
     mgr = MyOmen(db)
-    mgr.whatever.add(whatever(any=31))
-    mgr.whatever.add(whatever(any="str"))
+    mgr[whatever].add(whatever_row(any=31))
+    mgr[whatever].add(whatever_row(any="str"))
 
     # cache works
-    assert mgr.whatever.select_one(any=31)
-    assert mgr.whatever.select_one(any="str")
+    assert mgr[whatever].select_one(any=31)
+    assert mgr[whatever].select_one(any="str")
 
     # mismatched types don't work
-    assert not mgr.whatever.select_one(any="31")
-    assert not mgr.whatever.select_one(any=b"str")
+    assert not mgr[whatever].select_one(any="31")
+    assert not mgr[whatever].select_one(any=b"str")
 
 
 def test_inline_omen_no_codegen():
+    # noinspection PyAbstractClass
     class Harbinger(Omen):
         @classmethod
         def schema(cls, version):
@@ -311,15 +343,28 @@ def test_inline_omen_no_codegen():
     class Basic(ObjBase):
         _pk = ("id",)
 
+        # noinspection PyShadowingBuiltins
         def __init__(self, *, id=None, data=None, **kws):
             self.id = id
             self.data = data
             super().__init__(**kws)
 
+        def _to_db(self):
+            # modify data to the db
+            return {"id": self.id, "data": self.data + 1}
+
+        @classmethod
+        def _from_db(cls, dct):
+            dct = dct.copy()
+            dct["data"] -= 1
+            return super()._from_db(dct)
+
     class Basics(Table):
+        table_name = "basic"
         row_type = Basic
 
-    mgr = Harbinger(db, basic=Basics)
+    mgr = Harbinger(db)
+    mgr.set_table(Basics(mgr))
 
     # simple database self-test
 
@@ -327,11 +372,62 @@ def test_inline_omen_no_codegen():
 
     assert list(data_set.keys()) == list(mgr.table_types)
     mgr.load_dict(data_set)
+
+    # backend stores transformed data
+    assert mgr[Basics].select_one(id=1).data == 2
+
     dumped = mgr.dump_dict()
     assert dumped == data_set
 
 
+def test_custom_data_type():
+    # noinspection PyAbstractClass
+    class Harbinger(Omen):
+        @classmethod
+        def schema(cls, version):
+            return "create table basic (id integer primary key, data text)"
+
+    db = SqliteDb(":memory:")
+
+    class Custom:
+        def __init__(self, a, b):
+            self.a = a
+            self.b = b
+
+        def _to_db(self):
+            return self.a + "," + self.b
+
+    class Basic(ObjBase):
+        _pk = ("id",)
+
+        # noinspection PyShadowingBuiltins
+        def __init__(self, id=None, data: Custom = None):
+            self.id = id
+            self.data = data
+            super().__init__()
+
+        @classmethod
+        def _from_db(cls, dct):
+            dct["data"] = Custom(*dct["data"].split(","))
+            return Basic(**dct)
+
+    class Basics(Table[Basic]):
+        row_type = Basic
+
+    mgr = Harbinger(db, basic=Basics)
+    mgr.basic = Basics(mgr)
+    mgr.basic.new(id=1, data=Custom("a", "b"))
+    bas = mgr.basic.select_one(id=1)
+    assert bas.data.a == "a"
+    assert bas.data.b == "b"
+    with bas:
+        bas.data.a = "z"
+    bas = mgr.basic.select_one(id=1)
+    assert bas.data.a == "z"
+
+
 def test_override_for_keywords():
+    # noinspection PyAbstractClass
     class Harbinger(Omen):
         @classmethod
         def schema(cls, version):
@@ -342,6 +438,7 @@ def test_override_for_keywords():
     class Ent(ObjBase):
         _pk = ("id",)
 
+        # noinspection PyShadowingBuiltins
         def __init__(self, *, id=None, while_=None, for_=None, blob=None, **kws):
             self.id = id
             self.while_ = while_
@@ -365,7 +462,7 @@ def test_override_for_keywords():
                 "for_": dct["for"],
                 "blob": base64.b64decode(dct["blob"]),
             }
-            return Ent(**kws)
+            return cls(**kws)
 
     class Ents(Table):
         row_type = Ent

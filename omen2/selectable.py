@@ -1,19 +1,22 @@
-from typing import TypeVar, Generic, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from omen2 import ObjBase
+from typing import TypeVar, Generic, Optional, Iterable, TYPE_CHECKING
 
 from omen2.errors import OmenMoreThanOneError
+
+if TYPE_CHECKING:
+    # noinspection PyUnresolvedReferences
+    from omen2 import ObjBase
 
 T = TypeVar("T", bound="ObjBase")
 
 
+# noinspection PyDefaultArgument
 class Selectable(Generic[T]):
     # pylint: disable=dangerous-default-value, protected-access
 
-    row_type: "ObjBase"
+    row_type: "T"
 
-    def get(self, _id=None, _default=None, **kws):
+    # noinspection PyProtectedMember
+    def get(self, _id=None, _default=None, **kws) -> Optional[T]:
         """Shortcut method, you can access object by a single pk/positional id."""
         if _id is not None:
             assert len(self.row_type._pk) == 1
@@ -23,7 +26,7 @@ class Selectable(Generic[T]):
     def __iter__(self):
         return self.select()
 
-    def select_one(self, where={}, **kws):
+    def select_one(self, where={}, **kws) -> Optional[T]:
         """Return one row, None, or raises an OmenMoreThanOneError."""
         itr = self.select(where, **kws)
         return self._return_one(itr)
@@ -41,6 +44,6 @@ class Selectable(Generic[T]):
         except StopIteration:
             return one
 
-    def select(self, where={}, **kws):
+    def select(self, where={}, **kws) -> Iterable[T]:
         """Read objects of specified class."""
         raise NotImplementedError

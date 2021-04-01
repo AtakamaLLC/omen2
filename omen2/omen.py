@@ -7,11 +7,13 @@ import sys
 import logging as log
 
 from notanorm import DbBase, SqliteDb, DbType, DbModel
-from typing import Any, Optional, Dict, Type, Iterable
+from typing import Any, Optional, Dict, Type, Iterable, TypeVar
 
 from .table import Table
 from .object import ObjBase
 from .codegen import CodeGen
+
+T = TypeVar("T", bound=Table)
 
 
 def any_type(arg):
@@ -48,6 +50,7 @@ class Omen(abc.ABC):
     version: Optional[int] = None
     model: DbModel = None
     table_types: Dict[str, Type["Table"]] = None
+    tables: Dict[Type["Table"], "Table"] = None
 
     def __init_subclass__(cls, **_kws):
         cls.table_types = {}
@@ -59,6 +62,7 @@ class Omen(abc.ABC):
 
     def __init__(self, db: DbBase, migrate=True, **table_types):
         """Create a new manager with a db connection."""
+        self.tables = {}
         self.db = db
 
         if migrate:
@@ -67,31 +71,38 @@ class Omen(abc.ABC):
 
         self.table_types.update(table_types)
 
-        self.validate_model()
-
-        # create table containers
         for name, table_type in self.table_types.items():
-            setattr(self, name, table_type(self))
+            # allow user to specify the table name this way instead
+            if not hasattr(table_type, "table_name"):
+                table_type.table_name = name
+            table_type(self)
 
-    def set_table_type(self, table_name, table_type):
-        self.table_types[table_name] = table_type
-        self.validate_table(table_name, table_type)
+    def __getitem__(self, table_type: Type[T]) -> T:
+        return self.tables[table_type]
+
+    def __setitem__(self, table_type: Type[T], table: T):
+        assert table_type.table_name == table.table_name
+        self.table_types[table.table_name] = table_type
+        self.validate_table(table.table_name, table_type)
+        self.tables[table_type] = table
+
+    def set_table(self, table: Table):
+        self[type(table)] = table
 
     def load_dict(self, data_set: Dict[str, Iterable[Dict[str, Any]]]):
         # load sample data into self
         for name, values in data_set.items():
-            tab: Table = getattr(self, name)
+            tab: Table = self[self.table_types[name]]
             for entry in values:
                 tab.add(tab.row_type._from_db(entry))
 
     def dump_dict(self) -> Dict[str, Iterable[Dict[str, Any]]]:
         ret = {}
-        for name in self.table_types:
+        for ttype, tab in self.tables.items():
             lst = []
-            tab: Table = getattr(self, name)
             for obj in tab:
                 lst.append(obj._to_db())
-            ret[name] = lst
+            ret[ttype.table_name] = lst
         return ret
 
     def validate_table(self, name, tab):
@@ -103,7 +114,7 @@ class Omen(abc.ABC):
 
         assert issubclass(tab.row_type, ObjBase)
         assert isinstance(getattr(tab.row_type, "_pk"), tuple)
-        assert tab.row_type._table_type is tab
+        assert issubclass(tab.row_type._table_type, tab)
 
         if not getattr(tab, "field_names", None):
             log.debug("%s: default serialization field names used", name)
@@ -119,12 +130,6 @@ class Omen(abc.ABC):
             for fd in model.columns:
                 if fd.name == pk[0]:
                     tab.allow_auto = fd.autoinc
-
-    def validate_model(self):
-        """Validate my model."""
-        # codegen should be optional, so validate that the models match up
-        for name, tab in self.table_types.items():
-            self.validate_table(name, tab)
 
     @classmethod
     def codegen(cls, force=False):

@@ -1,17 +1,20 @@
 import weakref
 from contextlib import suppress
-from typing import Set, Dict, Iterable, TYPE_CHECKING, TypeVar, Generic
+from typing import Set, Dict, Iterable, TYPE_CHECKING, TypeVar
 
-from .object import ObjBase
 from .errors import OmenNoPkError, OmenDuplicateObjectError
 import logging as log
 
 from .selectable import Selectable
 
 if TYPE_CHECKING:
-    from omen2.omen import Omen
+    from notanorm import DbBase
+    from .omen import Omen
+    from .object import ObjBase
 
-T = TypeVar("T", bound=ObjBase)
+
+T = TypeVar("T", bound="ObjBase")
+U = TypeVar("U", bound="ObjBase")
 
 # noinspection PyDefaultArgument,PyProtectedMember
 class Table(Selectable[T]):
@@ -27,18 +30,21 @@ class Table(Selectable[T]):
 
     def __init__(self, mgr: "Omen"):
         self.manager = mgr
-        self._cache: Dict[dict, ObjBase] = weakref.WeakValueDictionary()
+        # noinspection PyTypeChecker
+        self._cache: Dict[dict, "ObjBase"] = weakref.WeakValueDictionary()
+        mgr.set_table(self)
 
     @property
-    def db(self) -> "Omen":
+    def db(self) -> "DbBase":
         return self.manager.db
 
+    # noinspection PyCallingNonCallable
     def new(self, *a, **kw) -> T:
         """Convenience function to create a new row and add it to the db."""
         obj = self.row_type(*a, **kw)
         return self.add(obj)
 
-    def add(self, obj) -> T:
+    def add(self, obj: U) -> U:
         """Insert an object into the db"""
         obj._bind(table=self)
         obj._commit()
@@ -90,7 +96,7 @@ class Table(Selectable[T]):
     def __select(self, where) -> Iterable[T]:
         for row in self.db_select(where):
             obj = self.row_type._from_db_not_new(row._asdict())
-            cached: ObjBase = self._cache.get(obj._to_pk_tuple())
+            cached: "ObjBase" = self._cache.get(obj._to_pk_tuple())
             if cached:
                 update = obj._to_db()
                 already = cached._to_db()
@@ -116,7 +122,7 @@ class Table(Selectable[T]):
 
 
 # noinspection PyDefaultArgument,PyProtectedMember
-class ObjCache(Generic[T]):
+class ObjCache(Selectable[T]):
     # pylint: disable=dangerous-default-value, protected-access
 
     def __init__(self, table: Table[T]):
@@ -131,10 +137,6 @@ class ObjCache(Generic[T]):
         for v in self.table._cache.values():
             if v._matches(kws):
                 yield v
-
-    def select_one(self, where={}, **kws) -> T:
-        itr = self.select(where, **kws)
-        return self._return_one(itr)
 
     def reload(self):
         return sum(1 for _ in self.table.select())
