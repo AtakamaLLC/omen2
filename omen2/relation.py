@@ -55,8 +55,8 @@ class Relation(Selectable[T]):
     def __len__(self):
         return sum(1 for _ in self.select())
 
-    def select(self, where={}, **kws) -> Iterable[T]:
-        where = {**where, **kws, **self._where}
+    def select(self, _where={}, **kws) -> Iterable[T]:
+        where = {**_where, **kws, **self._where}
         for k, v in where.items():
             if isinstance(v, Callable):
                 where[k] = v()

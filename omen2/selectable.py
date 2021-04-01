@@ -27,7 +27,7 @@ class Selectable(Generic[T]):
         # noinspection PyTypeChecker
         if isinstance(item, self.row_type):
             # noinspection PyProtectedMember
-            return self.select_one(where=item._to_pk()) is not None
+            return self.select_one(_where=item._to_pk()) is not None
         return self.get(item) is not None
 
     def __call__(self, _id=None, **kws) -> Optional[T]:
@@ -44,9 +44,9 @@ class Selectable(Generic[T]):
     def __iter__(self):
         return self.select()
 
-    def select_one(self, where={}, **kws) -> Optional[T]:
+    def select_one(self, _where={}, **kws) -> Optional[T]:
         """Return one row, None, or raises an OmenMoreThanOneError."""
-        itr = self.select(where, **kws)
+        itr = self.select(_where, **kws)
         return self._return_one(itr)
 
     @staticmethod
@@ -62,6 +62,6 @@ class Selectable(Generic[T]):
         except StopIteration:
             return one
 
-    def select(self, where={}, **kws) -> Iterable[T]:
+    def select(self, _where={}, **kws) -> Iterable[T]:
         """Read objects of specified class."""
         raise NotImplementedError
