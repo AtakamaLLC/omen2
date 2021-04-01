@@ -72,6 +72,13 @@ db = SqliteDb(":memory:")
 # upon connection to a database, this will do migration, or creation as needed
 mgr = MyOmen(db, cars=Cars)
 
+# there's always a mapping from table class to instance
+# so Omen knows what classes are in charge of what tables
+mgr.cars = mgr[Cars]
+
+# fine too (or stick in init)
+mgr.cars = Cars(self)
+
 # by default, you can always iterate on tables
 assert mgr.cars.count() == 0
 
