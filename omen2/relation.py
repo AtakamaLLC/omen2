@@ -38,7 +38,8 @@ class Relation(Selectable[T]):
     def table(self):
         if not self.__table:
             mgr: "Omen" = self._from._meta.table.manager
-            self.__table: "Table" = mgr[self.table_type]
+            self.__table: "Table" = mgr.get_table_by_name(self.table_type.table_name)
+            self.table_type = type(self.__table)
         return self.__table
 
     def add(self, obj: "ObjBase"):

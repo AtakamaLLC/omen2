@@ -77,6 +77,9 @@ class Omen(abc.ABC):
                 table_type.table_name = name
             table_type(self)
 
+    def get_table_by_name(self, table_name):
+        return self[self.table_types[table_name]]
+
     def __getitem__(self, table_type: Type[T]) -> T:
         return self.tables[table_type]
 
@@ -92,7 +95,7 @@ class Omen(abc.ABC):
     def load_dict(self, data_set: Dict[str, Iterable[Dict[str, Any]]]):
         # load sample data into self
         for name, values in data_set.items():
-            tab: Table = self[self.table_types[name]]
+            tab: Table = self.get_table_by_name(name)
             for entry in values:
                 tab.add(tab.row_type._from_db(entry))
 
