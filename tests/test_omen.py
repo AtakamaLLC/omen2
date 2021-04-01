@@ -187,6 +187,8 @@ def test_shortcut_syntax():
     car = mgr[Cars].new(gas_level=2)
     assert car
     assert db.select_one("cars")
+    assert mgr[Cars].get(car.id)
+    assert not mgr[Cars].get("not a car id")
 
 
 def test_cache():
@@ -271,6 +273,13 @@ def test_cascade_relations():
     assert len(car.doors) == 2
     assert mgr.cars.select_one(id=3)
     assert not mgr.cars.select_one(id=1)
+
+    # cascaded remove
+    assert len(list(mgr.db.select("doors"))) == 2
+
+    car._remove()
+
+    assert len(list(mgr.db.select("doors"))) == 0
 
 
 def test_race_sync(tmp_path):
