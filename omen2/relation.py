@@ -19,7 +19,7 @@ class Relation(Selectable[T]):
     def row_type(self):
         return self.table_type.row_type
 
-    def __init__(self, _from: "ObjBase", _init=None, where=None, *, cascade):
+    def __init__(self, _from: "ObjBase", _init=None, *, where=None, cascade):
         self.cascade = cascade
 
         self._from = _from
