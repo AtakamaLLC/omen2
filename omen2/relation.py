@@ -1,16 +1,23 @@
-from typing import TypeVar, Generic, Callable, Iterable, TYPE_CHECKING, List
+from typing import TypeVar, Callable, Iterable, TYPE_CHECKING, List
+
+from .selectable import Selectable
 
 if TYPE_CHECKING:
     from omen2 import ObjBase, Omen, Table
+    from typing import Type
 
 T = TypeVar("T")
 
 
 # noinspection PyProtectedMember,PyDefaultArgument
-class Relation(Generic[T]):
+class Relation(Selectable[T]):
     # pylint: disable=protected-access, dangerous-default-value
 
-    table_type: "Table" = None
+    table_type: "Type[Table[T]]" = None
+
+    @property
+    def row_type(self):
+        return self.table_type.row_type
 
     def __init__(self, _from: "ObjBase", _init=None, **where):
         self._from = _from
@@ -31,7 +38,8 @@ class Relation(Generic[T]):
     def table(self):
         if not self.__table:
             mgr: "Omen" = self._from._meta.table.manager
-            self.__table: "Table" = getattr(mgr, self.table_type.table_name)
+            self.__table: "Table" = mgr.get_table_by_name(self.table_type.table_name)
+            self.table_type = type(self.__table)
         return self.__table
 
     def add(self, obj: "ObjBase"):
@@ -61,17 +69,20 @@ class Relation(Generic[T]):
                 yield obj
 
     def _link_obj(self, obj):
-        for k, v in self._where.items():
-            if isinstance(v, Callable):
-                v = v()
-            setattr(obj, k, v)
+        obj._meta.table = self.table
+        with obj:
+            for k, v in self._where.items():
+                if isinstance(v, Callable):
+                    v = v()
+                setattr(obj, k, v)
 
-    def commit(self, manager):
+    def commit(self, manager=None):
+        if not manager:
+            manager = self.table.manager
         for item in self.__saved:
             if not item._meta.table:
                 item._bind(manager=manager)
-            with item:
-                self._link_obj(item)
+            self._link_obj(item)
         self.__saved.clear()
 
     def __iter__(self):

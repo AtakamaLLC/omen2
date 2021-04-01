@@ -13,11 +13,15 @@ class MyOmen(Omen):
         return """
             create table cars(id integer primary key, color text not null, gas_level double default 1.0);
             create table doors(carid integer, type text, primary key(carid, type));
-            create table blobs(oid blob primary key, data blob not null, num double);
+            create table blobs(oid blob primary key, data blob not null, num double, boo boolean);
             create table whatever(any primary key);
         """
 
     @classmethod
     def migrate(cls, db, version):
         # you should create a migration for each version
+        assert False
+
+    def restore(self, backup_info):
+        # you should create a restore function
         assert False
