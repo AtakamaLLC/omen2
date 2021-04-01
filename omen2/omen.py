@@ -18,7 +18,7 @@ def any_type(arg):
     return arg
 
 
-def default_type(typ: DbType) -> Any:
+def default_type(typ: DbType) -> Any:  # pylint: disable=too-many-return-statements
     if typ == DbType.ANY:
         return any_type
     if typ == DbType.INTEGER:

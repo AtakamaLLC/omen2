@@ -9,6 +9,8 @@ T = TypeVar("T", bound="ObjBase")
 
 
 class Selectable(Generic[T]):
+    # pylint: disable=dangerous-default-value, protected-access
+
     row_type: "ObjBase"
 
     def get(self, _id=None, _default=None, **kws):
