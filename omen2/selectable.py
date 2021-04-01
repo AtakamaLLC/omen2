@@ -1,6 +1,6 @@
 from typing import TypeVar, Generic, Optional, Iterable, TYPE_CHECKING
 
-from omen2.errors import OmenMoreThanOneError
+from omen2.errors import OmenMoreThanOneError, OmenKeyError
 
 if TYPE_CHECKING:
     # noinspection PyUnresolvedReferences
@@ -22,6 +22,24 @@ class Selectable(Generic[T]):
             assert len(self.row_type._pk) == 1
             kws[self.row_type._pk[0]] = _id
         return self.select_one(**kws) or _default
+
+    def __contains__(self, item) -> bool:
+        # noinspection PyTypeChecker
+        if isinstance(item, self.row_type):
+            # noinspection PyProtectedMember
+            return self.select_one(where=item._to_pk()) is not None
+        return self.get(item) is not None
+
+    def __call__(self, _id=None, **kws) -> Optional[T]:
+        if _id is not None:
+            # noinspection PyProtectedMember
+            assert len(self.row_type._pk) == 1
+            # noinspection PyProtectedMember
+            kws[self.row_type._pk[0]] = _id
+        ret = self.select_one(**kws)
+        if ret is None:
+            raise OmenKeyError("%s in %s", kws, self.__class__.__name__)
+        return ret
 
     def __iter__(self):
         return self.select()

@@ -10,7 +10,7 @@ from notanorm.errors import IntegrityError
 
 from omen2 import Omen, ObjBase
 from omen2.table import ObjCache, Table
-from omen2.errors import OmenNoPkError
+from omen2.errors import OmenNoPkError, OmenKeyError
 from tests.schema import MyOmen
 
 # by calling force, code will always be regenerated... otherwise it's only regenerated if the import fails
@@ -189,6 +189,14 @@ def test_shortcut_syntax():
     assert db.select_one("cars")
     assert mgr[Cars].get(car.id)
     assert not mgr[Cars].get("not a car id")
+    assert car.id in mgr[Cars]
+    assert car in mgr[Cars]
+    # todo: why does __call__ not type hint properly?
+    # noinspection PyTypeChecker
+    assert mgr[Cars](car.id)
+    with pytest.raises(OmenKeyError):
+        # noinspection PyTypeChecker
+        assert mgr[Cars]("not a car id")
 
 
 def test_cache():
