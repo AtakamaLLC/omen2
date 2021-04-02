@@ -166,7 +166,7 @@ class ObjBase:
     def _get_related(self):
         related = {}
         for val in self.__dict__.values():
-            if isinstance(val, Relation):
+            if isinstance(val, Relation) and val.cascade:
                 related[val] = list(val.select())
         return related
 

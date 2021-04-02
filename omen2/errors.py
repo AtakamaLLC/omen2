@@ -17,4 +17,8 @@ class OmenNoPkError(OmenError, ValueError):
     pass
 
 
+class OmenKeyError(OmenError, KeyError):
+    pass
+
+
 IntegrityError = notanorm.errors.IntegrityError

@@ -110,14 +110,14 @@ class Table(Selectable[T]):
                 self._add_cache(obj)
             yield obj
 
-    def select(self, where={}, **kws) -> Iterable[T]:
+    def select(self, _where={}, **kws) -> Iterable[T]:
         """Read objects of specified class."""
-        kws.update(where)
+        kws.update(_where)
         yield from self.__select(kws)
 
-    def count(self, where={}, **kws) -> int:
+    def count(self, _where={}, **kws) -> int:
         """Return count of objs matchig where clause."""
-        kws.update(where)
+        kws.update(_where)
         return self.db.count(self.table_name, kws)
 
 
@@ -132,8 +132,8 @@ class ObjCache(Selectable[T]):
     def __getattr__(self, item):
         return getattr(self.table, item)
 
-    def select(self, where={}, **kws) -> Iterable[T]:
-        kws.update(where)
+    def select(self, _where={}, **kws) -> Iterable[T]:
+        kws.update(_where)
         for v in self.table._cache.values():
             if v._matches(kws):
                 yield v

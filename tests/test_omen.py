@@ -10,7 +10,7 @@ from notanorm.errors import IntegrityError
 
 from omen2 import Omen, ObjBase
 from omen2.table import ObjCache, Table
-from omen2.errors import OmenNoPkError
+from omen2.errors import OmenNoPkError, OmenKeyError
 from tests.schema import MyOmen
 
 # by calling force, code will always be regenerated... otherwise it's only regenerated if the import fails
@@ -19,11 +19,28 @@ MyOmen.codegen(force=True)
 import tests.schema_gen as gen_objs
 
 # every table has a row_type, you can derive from it
+
+
+class CarDriver(gen_objs.car_drivers_row):
+    def __init__(self, **kws):
+        self.drivers = gen_objs.drivers_relation(
+            self, where={"id": lambda: self.driverid}, cascade=False
+        )
+        super().__init__(**kws)
+
+
+class CarDrivers(gen_objs.car_drivers[CarDriver]):
+    row_type = CarDriver
+
+
 class Car(gen_objs.cars_row):
     def __init__(self, color="black", **kws):
         self.not_saved_to_db = "some thing"
         self.doors = gen_objs.doors_relation(
-            self, kws.pop("doors", None), carid=lambda: self.id
+            self, kws.pop("doors", None), where={"carid": lambda: self.id}, cascade=True
+        )
+        self.car_drivers = gen_objs.car_drivers_relation(
+            self, where={"carid": lambda: self.id}, cascade=True
         )
         super().__init__(color=color, **kws)
 
@@ -189,6 +206,14 @@ def test_shortcut_syntax():
     assert db.select_one("cars")
     assert mgr[Cars].get(car.id)
     assert not mgr[Cars].get("not a car id")
+    assert car.id in mgr[Cars]
+    assert car in mgr[Cars]
+    # todo: why does __call__ not type hint properly?
+    # noinspection PyTypeChecker
+    assert mgr[Cars](car.id)
+    with pytest.raises(OmenKeyError):
+        # noinspection PyTypeChecker
+        assert mgr[Cars]("not a car id")
 
 
 def test_cache():
@@ -280,6 +305,36 @@ def test_cascade_relations():
     car._remove()
 
     assert len(list(mgr.db.select("doors"))) == 0
+
+
+def test_remove_driver():
+    db = SqliteDb(":memory:")
+    # upon connection to a database, this will do migration, or creation as needed
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    mgr.car_drivers = CarDrivers(mgr)
+    Driver = gen_objs.drivers
+    mgr.drivers = mgr[Driver]
+
+    car1 = mgr.cars.add(Car(id=1, gas_level=2, color="green"))
+    car2 = mgr.cars.add(Car(id=2, gas_level=2, color="green"))
+
+    driver1 = mgr.drivers.new(name="bob")
+
+    car1.car_drivers.add(CarDriver(carid=car1.id, driverid=driver1.id))
+    car2.car_drivers.add(CarDriver(carid=car1.id, driverid=driver1.id))
+
+    assert len(car1.car_drivers) == 1
+    assert len(car2.car_drivers) == 1
+
+    for cd in car1.car_drivers:
+        car1.car_drivers.remove(cd)
+
+    assert len(car1.car_drivers) == 0
+    assert len(car2.car_drivers) == 1
+
+    assert len(list(mgr.db.select("drivers"))) == 1
+    assert len(list(mgr.db.select("car_drivers"))) == 1
 
 
 def test_race_sync(tmp_path):
