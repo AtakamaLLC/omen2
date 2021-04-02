@@ -1,0 +1,7 @@
+pytest
+coverage>=5
+pytest-cov
+pylint
+notanorm
+black
+pre-commit
