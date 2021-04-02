@@ -38,7 +38,7 @@ class Selectable(Generic[T]):
             kws[self.row_type._pk[0]] = _id
         ret = self.select_one(**kws)
         if ret is None:
-            raise OmenKeyError("%s in %s", kws, self.__class__.__name__)
+            raise OmenKeyError("%s in %s" % (kws, self.__class__.__name__))
         return ret
 
     def __iter__(self):
