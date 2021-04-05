@@ -115,6 +115,9 @@ class Omen(abc.ABC):
             tab.table_name = name
         assert tab.table_name == name
 
+        if not hasattr(tab, "row_type"):
+            self.bootstrap_row_type(tab)
+
         assert issubclass(tab.row_type, ObjBase)
         assert isinstance(getattr(tab.row_type, "_pk"), tuple)
         assert issubclass(tab.row_type._table_type, tab)
@@ -133,6 +136,14 @@ class Omen(abc.ABC):
             for fd in model.columns:
                 if fd.name == pk[0]:
                     tab.allow_auto = fd.autoinc
+
+    def bootstrap_row_type(self, tab):
+        bases = getattr(tab, "__orig_bases__", None)
+        if bases:
+            args = getattr(bases[0], "__args__")
+            if args and issubclass(args[0], ObjBase):
+                tab.row_type = args[0]
+                tab.row_type._table_type = tab
 
     @classmethod
     def codegen(cls, force=False):
@@ -158,6 +169,8 @@ class Omen(abc.ABC):
             table_type = getattr(generated, name)
             if name not in cls.table_types:
                 cls.table_types[name] = table_type
+
+        return generated
 
     @staticmethod
     def __multi_query(db, sql):

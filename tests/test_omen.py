@@ -9,6 +9,7 @@ from notanorm import SqliteDb
 from notanorm.errors import IntegrityError
 
 from omen2 import Omen, ObjBase
+from omen2.m2mhelper import M2MHelper
 from omen2.table import ObjCache, Table
 from omen2.errors import OmenNoPkError, OmenKeyError
 from tests.schema import MyOmen
@@ -545,3 +546,85 @@ def test_override_for_keywords():
     mgr.load_dict(data_set)
     dumped = mgr.dump_dict()
     assert dumped == data_set
+
+
+def test_m2m_multi_inherit():
+    # noinspection PyAbstractClass
+    class Harbinger(Omen):
+        @classmethod
+        def schema(cls, version):
+            return """
+                create table groups (id integer primary key, data text);
+                create table peeps (id integer primary key, data text);
+                create table group_peeps (groupid integer, peepid integer, role text, primary key (groupid, peepid));
+                """
+
+    Harbinger.codegen(force=True)
+    from . import test_omen_gen as module
+
+    db = SqliteDb(":memory:")
+
+    class Group(module.groups_row):
+        def __init__(self, id=None, data=None):
+            self.peeps = M2MHelper(
+                self,
+                types=(module.group_peeps, Peeps),
+                where=({"groupid": "id"}, {"peepid": "id"}),
+            )
+            super().__init__(id=id, data=data)
+
+    class Peep(module.peeps_row):
+        def __init__(self, id=None, data=None):
+            self.groups = M2MHelper(
+                self,
+                types=(module.group_peeps, Groups),
+                where=({"peepid": "id"}, {"groupid": "id"}),
+            )
+            super().__init__(id=id, data=data)
+
+    class Groups(module.groups[Group]):
+        row_type = Group
+
+    class Peeps(module.peeps[Peep]):
+        row_type = Peep
+
+    mgr = Harbinger(db, groups=Groups, peeps=Peeps)
+    mgr.groups = Groups(mgr)
+    mgr.peeps = mgr[Peeps]
+    grp1 = mgr.groups.new(id=1, data="g1")
+    grp2 = mgr.groups.new(id=2, data="g2")
+    peep1 = mgr.peeps.new(id=2, data="p1")
+    peep2 = mgr.peeps.new(id=3, data="p2")
+    res1 = grp1.peeps.add(peep1, role="role")
+    res2 = grp2.peeps.add(peep2, role="role2")
+
+    assert len(grp1.peeps) == 1
+    assert len(grp2.peeps) == 1
+
+    assert res1.role == "role"
+    assert res1.data == "p1"
+
+    assert res2.role == "role2"
+    assert res2.data == "p2"
+
+    peep1 = grp1.peeps.get(role="role")
+    peep_by_id = grp1.peeps.get(id=2)
+    assert peep_by_id == peep1
+
+    assert not grp2.peeps.get(role="role")
+    assert grp2.peeps.get(role="role2")
+
+    for gr in peep1.groups:
+        assert gr.role == "role"
+
+    with peep1.groups(1) as gr:
+        gr.role = "new_role"
+        gr.data = "new_data"
+
+    assert mgr.db.select_one("groups", id=1).data == "new_data"
+    assert mgr.db.select_one("group_peeps", groupid=1).role == "new_role"
+
+    grp1.peeps.remove(peep1)
+
+    assert mgr.db.select_one("groups", id=1).data == "new_data"
+    assert not mgr.db.select_one("group_peeps", groupid=1)
