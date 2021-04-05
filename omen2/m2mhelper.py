@@ -13,7 +13,6 @@ from .relation import Relation
 
 if TYPE_CHECKING:
     from omen2 import ObjBase, Omen, Table, Relation
-    from typing import Type
 
 T1 = TypeVar("T1")
 T2 = TypeVar("T2")
@@ -111,8 +110,12 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
 
         # relationships use lamdas to get id's from the related table
         rel_where = where[0].copy()
+
+        def getter_func(v):
+            return lambda: getattr(_from, v)
+
         for k, v in rel_where.items():
-            rel_where[k] = lambda: getattr(_from, v)
+            rel_where[k] = getter_func(v)
 
         self.table_type = types[0]
         self.table_type_2 = types[1]
@@ -160,7 +163,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
 
     def select(self, _where={}, **kws) -> Iterable[Union[T2, M2MMixObj[T1, T2]]]:
         kws2 = {}
-        for k, v in kws.copy().items():
+        for k in kws.copy():
             if k not in self.table_type.field_names:
                 kws2[k] = kws.pop(k)
 
@@ -176,7 +179,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
 
     if TYPE_CHECKING:
 
-        def get(
+        def get(  # pylint: disable=unused-argument, no-self-use
             self, _id=None, _default=None, **kws
         ) -> Optional[Union[T2, M2MMixObj[T1, T2]]]:
             ...

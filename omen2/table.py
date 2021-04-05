@@ -1,4 +1,3 @@
-import typing
 import weakref
 from contextlib import suppress
 from typing import Set, Dict, Iterable, TYPE_CHECKING, TypeVar
