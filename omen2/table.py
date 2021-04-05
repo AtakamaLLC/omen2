@@ -1,3 +1,4 @@
+import typing
 import weakref
 from contextlib import suppress
 from typing import Set, Dict, Iterable, TYPE_CHECKING, TypeVar
@@ -50,7 +51,7 @@ class Table(Selectable[T]):
         obj._commit()
         return obj
 
-    def remove(self, obj: T):
+    def remove(self, obj: "ObjBase"):
         """Remove an object from the db."""
         if not obj._meta or not obj._meta.table:
             log.debug("not removing object that isn't in the db")
@@ -58,7 +59,7 @@ class Table(Selectable[T]):
         assert obj._meta.table is self
         obj._remove()
 
-    def _remove(self, obj: T):
+    def _remove(self, obj: "ObjBase"):
         """Remove an object from the db, without cascading."""
         self._cache.pop(obj._to_pk_tuple(), None)
         vals = obj._to_pk()

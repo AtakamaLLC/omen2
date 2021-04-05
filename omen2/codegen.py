@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 class CodeGen:
-    def __init__(self, module_path):
+    def __init__(self, module_path, class_type=None):
         """Create an omen2 codegen object.
 
         Args:
@@ -23,7 +23,7 @@ class CodeGen:
             self.module, _ = os.path.splitext(
                 os.path.basename(sys.modules["__main__"].__file__)
             )
-        self.base_cls = self.import_mod()
+        self.base_cls = class_type or self.import_mod()
         self.model = self.base_cls.model
 
         # trivially escape all reserved words
@@ -162,12 +162,12 @@ class CodeGen:
     def generate_from_class(class_type):
         """Given a class derived from omen2.Omen, generate omen2 code."""
         class_path = class_type.__module__ + "." + class_type.__name__
-        CodeGen.generate_from_path(class_path)
+        CodeGen.generate_from_path(class_path, class_type)
 
     @staticmethod
-    def generate_from_path(class_path):
+    def generate_from_path(class_path, class_type=None):
         """Given a dotted python path name, generate omen2 code."""
-        cg = CodeGen(class_path)
+        cg = CodeGen(class_path, class_type)
 
         out_path = cg.output_path()
         tmp_path = out_path + ".tmp"
