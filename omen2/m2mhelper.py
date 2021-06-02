@@ -36,7 +36,7 @@ class M2MMixObj(Generic[T1, T2]):
         self.__ready = True
 
     def __getattr__(self, key):
-        if not hasattr(self._obj1, key):
+        if hasattr(self._obj2, key):
             return getattr(self._obj2, key)
         return getattr(self._obj1, key)
 
@@ -64,10 +64,18 @@ class M2MMixObj(Generic[T1, T2]):
         return self._obj1 == other._obj1 and self._obj2 == other._obj2
 
     def __lt__(self, other: "M2MMixObj"):
-        return self._obj1 < other._obj1 and self._obj2 < other._obj2
+        return (
+            self._obj2 < other._obj2
+            or self._obj2 == other._obj2
+            and self._obj1 < other._obj1
+        )
 
     def __gt__(self, other: "M2MMixObj"):
-        return self._obj1 > other._obj1 and self._obj2 > other._obj2
+        return (
+            self._obj2 > other._obj2
+            or self._obj2 == other._obj2
+            and self._obj1 > other._obj1
+        )
 
 
 # noinspection PyProtectedMember,PyDefaultArgument
@@ -149,7 +157,23 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
                 else:
                     resolved[k] = getattr(obj, v)
 
-    def add(self, obj: T2, **kws) -> Union[T2, M2MMixObj[T1, T2]]:
+    def add(self, obj_or_id: T2 = None, **kws) -> Union[T2, M2MMixObj[T1, T2]]:
+        from omen2.object import ObjBase
+
+        if obj_or_id is None or not isinstance(obj_or_id, (M2MMixObj, ObjBase)):
+            # we have to call "get" on table 2, to get the obj
+            # but we want to only use the primary keys of table 2
+            # otherwise, we will fail `matches()`
+            kws2 = {}
+            for k in kws.copy():
+                if k in self.row_type_2._pk:
+                    kws2[k] = kws.pop(k)
+            obj = self.table_2.get(obj_or_id, **kws2)
+            if not obj:
+                raise ValueError
+        else:
+            obj = obj_or_id
+
         self.__resolve_where(kws, side=0, invert=False)
         self.__resolve_where(kws, side=1, obj=obj, invert=False)
 
@@ -167,11 +191,12 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
             if k not in self.table_type.field_names:
                 kws2[k] = kws.pop(k)
 
+        kws3 = kws2.copy()
         for rel in super().select(_where, **kws):
             # noinspection PyUnboundLocalVariable
             self.__resolve_where(kws2, side=1, obj=rel, invert=True)
             for sub in self.table_2.select(kws2):
-                if sub._matches(kws2):
+                if sub._matches(kws3):
                     if self.need_mixin:
                         yield M2MMixObj(sub, rel)
                     else:
@@ -192,7 +217,34 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
             kws[self.row_type_2._pk[0]] = _id
         return super().__call__(**kws)
 
-    def remove(self, obj: "ObjBase"):
+    def remove(self, obj_or_id: "ObjBase" = None, **kws):
+        from omen2.object import ObjBase
+
+        if not isinstance(obj_or_id, (ObjBase, M2MMixObj)) or not obj_or_id:
+            # we have to call "get" to get the obj
+            obj = self.get(obj_or_id, None, **kws)
+        else:
+            obj = obj_or_id
         obj = self.select_one(**obj._to_pk())
         if obj:
             super().remove(obj._obj2)
+
+    def __iter__(self):
+        return self.select()
+
+    def __len__(self):
+        return sum(1 for _ in self.select())
+
+    def get(self, _id=None, _default=None, **kws) -> Optional[M2MMixObj[T1, T2]]:
+        """Shortcut method, you can access object by a single pk/positional id."""
+        if _id is not None:
+            # if you only specify an id, we assume you mean the related-table's pk
+            # get-semantics for the related table will pick the right fields
+            obj = self.table_2.get(_id)
+            if not obj:
+                return None
+            # then we convert that to a where clause on the m2m table
+            # and merge it in with any other keywords specified
+            self.__resolve_where(kws, side=0, invert=False)
+            self.__resolve_where(kws, side=1, obj=obj, invert=False)
+        return self.select_one(**kws) or _default

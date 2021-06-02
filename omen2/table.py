@@ -50,9 +50,11 @@ class Table(Selectable[T]):
         obj._commit()
         return obj
 
-    def remove(self, obj: "ObjBase"):
+    def remove(self, obj: "ObjBase" = None, **kws):
         """Remove an object from the db."""
-        if not obj._meta or not obj._meta.table:
+        if obj is None:
+            obj = self.select_one(**kws)
+        if not obj or not obj._meta or not obj._meta.table:
             log.debug("not removing object that isn't in the db")
             return
         assert obj._meta.table is self
