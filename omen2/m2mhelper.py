@@ -1,3 +1,5 @@
+from omen2.object import ObjBase
+
 from typing import (
     TypeVar,
     Iterable,
@@ -12,7 +14,7 @@ from typing import (
 from .relation import Relation
 
 if TYPE_CHECKING:
-    from omen2 import ObjBase, Omen, Table, Relation
+    from omen2 import Omen, Table, Relation
 
 T1 = TypeVar("T1")
 T2 = TypeVar("T2")
@@ -158,8 +160,6 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
                     resolved[k] = getattr(obj, v)
 
     def add(self, obj_or_id: T2 = None, **kws) -> Union[T2, M2MMixObj[T1, T2]]:
-        from omen2.object import ObjBase
-
         if obj_or_id is None or not isinstance(obj_or_id, (M2MMixObj, ObjBase)):
             # we have to call "get" on table 2, to get the obj
             # but we want to only use the primary keys of table 2
@@ -202,13 +202,6 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
                     else:
                         yield sub
 
-    if TYPE_CHECKING:
-
-        def get(  # pylint: disable=unused-argument, no-self-use
-            self, _id=None, _default=None, **kws
-        ) -> Optional[Union[T2, M2MMixObj[T1, T2]]]:
-            ...
-
     def __call__(self, _id=None, **kws) -> Optional[Union[T2, M2MMixObj[T1, T2]]]:
         # noinspection PyProtectedMember
         if _id is not None:
@@ -218,8 +211,6 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         return super().__call__(**kws)
 
     def remove(self, obj_or_id: "ObjBase" = None, **kws):
-        from omen2.object import ObjBase
-
         if not isinstance(obj_or_id, (ObjBase, M2MMixObj)) or not obj_or_id:
             # we have to call "get" to get the obj
             obj = self.get(obj_or_id, None, **kws)
