@@ -323,7 +323,7 @@ def test_remove_driver():
     driver1 = mgr.drivers.new(name="bob")
 
     car1.car_drivers.add(CarDriver(carid=car1.id, driverid=driver1.id))
-    car2.car_drivers.add(CarDriver(carid=car1.id, driverid=driver1.id))
+    car2.car_drivers.add(CarDriver(carid=car2.id, driverid=driver1.id))
 
     assert len(car1.car_drivers) == 1
     assert len(car2.car_drivers) == 1
@@ -336,6 +336,16 @@ def test_remove_driver():
 
     assert len(list(mgr.db.select("drivers"))) == 1
     assert len(list(mgr.db.select("car_drivers"))) == 1
+
+    car1.car_drivers.add(CarDriver(carid=car1.id, driverid=driver1.id))
+    assert len(car1.car_drivers) == 1
+    mgr.car_drivers.remove(carid=car1.id, driverid=driver1.id)
+    # ok to double-remove
+    mgr.car_drivers.remove(carid=car1.id, driverid=driver1.id)
+    # removing None is a no-op (ie: remove.(select_one(criteria....)))
+    mgr.car_drivers.remove(None)
+    assert len(car1.car_drivers) == 0
+    assert len(car2.car_drivers) == 1
 
 
 def test_race_sync(tmp_path):
@@ -396,6 +406,16 @@ def test_any_type():
     assert not mgr[whatever].select_one(any=b"str")
 
 
+class InlineBasic(ObjBase):
+    _pk = ("id",)
+
+    # noinspection PyShadowingBuiltins
+    def __init__(self, *, id=None, data=None, **kws):
+        self.id = id
+        self.data = data
+        super().__init__(**kws)
+
+
 def test_inline_omen_no_codegen():
     # noinspection PyAbstractClass
     class Harbinger(Omen):
@@ -405,15 +425,7 @@ def test_inline_omen_no_codegen():
 
     db = SqliteDb(":memory:")
 
-    class Basic(ObjBase):
-        _pk = ("id",)
-
-        # noinspection PyShadowingBuiltins
-        def __init__(self, *, id=None, data=None, **kws):
-            self.id = id
-            self.data = data
-            super().__init__(**kws)
-
+    class Basic(InlineBasic):
         def _to_db(self):
             # modify data to the db
             return {"id": self.id, "data": self.data + 1}
@@ -462,22 +474,15 @@ def test_custom_data_type():
         def _to_db(self):
             return self.a + "," + self.b
 
-    class Basic(ObjBase):
-        _pk = ("id",)
-
-        # noinspection PyShadowingBuiltins
-        def __init__(self, id=None, data: Custom = None):
-            self.id = id
-            self.data = data
-            super().__init__()
-
+    class Basic(InlineBasic):
         @classmethod
         def _from_db(cls, dct):
             dct["data"] = Custom(*dct["data"].split(","))
             return Basic(**dct)
 
+    # tests bootstrapping
     class Basics(Table[Basic]):
-        row_type = Basic
+        pass
 
     mgr = Harbinger(db, basic=Basics)
     mgr.basic = Basics(mgr)

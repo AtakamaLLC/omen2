@@ -53,6 +53,9 @@ class Table(Selectable[T]):
     def remove(self, obj: "ObjBase" = None, **kws):
         """Remove an object from the db."""
         if obj is None:
+            if not kws:
+                log.debug("not removing obj, because it is None")
+                return
             obj = self.select_one(**kws)
         if not obj or not obj._meta or not obj._meta.table:
             log.debug("not removing object that isn't in the db")
