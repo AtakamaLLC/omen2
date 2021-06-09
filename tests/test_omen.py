@@ -641,3 +641,13 @@ def test_m2m_multi_inherit():
 
     assert mgr.db.select_one("groups", id=1).data == "new_data"
     assert not mgr.db.select_one("group_peeps", groupid=1)
+
+    # you can add by id too
+    grp1.peeps.add(peep1.id, role="role3")
+    assert db.select_one("group_peeps", groupid=1).role == "role3"
+
+    # you can get by id too
+    assert grp1.peeps(peep1.id).role == "role3"
+    assert grp1.peeps(id=peep1.id).role == "role3"
+    assert grp1.peeps(peepid=peep1.id).role == "role3"
+    assert grp1.peeps.get(peep1.id).role == "role3"
