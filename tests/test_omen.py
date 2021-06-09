@@ -11,7 +11,7 @@ from notanorm.errors import IntegrityError
 from omen2 import Omen, ObjBase
 from omen2.m2mhelper import M2MHelper
 from omen2.table import ObjCache, Table
-from omen2.errors import OmenNoPkError, OmenKeyError
+from omen2.errors import OmenNoPkError, OmenKeyError, OmenMoreThanOneError
 from tests.schema import MyOmen
 
 # by calling force, code will always be regenerated... otherwise it's only regenerated if the import fails
@@ -321,6 +321,7 @@ def test_remove_driver():
     car2 = mgr.cars.add(Car(id=2, gas_level=2, color="green"))
 
     driver1 = mgr.drivers.new(name="bob")
+    driver2 = mgr.drivers.new(name="joe")
 
     car1.car_drivers.add(CarDriver(carid=car1.id, driverid=driver1.id))
     car2.car_drivers.add(CarDriver(carid=car2.id, driverid=driver1.id))
@@ -334,7 +335,7 @@ def test_remove_driver():
     assert len(car1.car_drivers) == 0
     assert len(car2.car_drivers) == 1
 
-    assert len(list(mgr.db.select("drivers"))) == 1
+    assert len(list(mgr.db.select("drivers"))) == 2
     assert len(list(mgr.db.select("car_drivers"))) == 1
 
     car1.car_drivers.add(CarDriver(carid=car1.id, driverid=driver1.id))
@@ -346,6 +347,13 @@ def test_remove_driver():
     mgr.car_drivers.remove(None)
     assert len(car1.car_drivers) == 0
     assert len(car2.car_drivers) == 1
+
+    car2.car_drivers.add(CarDriver(carid=car2.id, driverid=driver2.id))
+    assert len(list(mgr.db.select("car_drivers"))) == 2
+    with pytest.raises(OmenMoreThanOneError):
+        # kwargs remove is not a generic method for removing all matching things
+        # make your own loop if that's what you want
+        mgr.car_drivers.remove(carid=car2.id)
 
 
 def test_race_sync(tmp_path):
