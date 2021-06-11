@@ -224,9 +224,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
                 return
         else:
             obj = obj_or_id
-        obj = self.select_one(**obj._to_pk())
-        if obj:
-            super().remove(obj._obj2)
+        super().remove(obj._obj1)
 
     def __iter__(self):
         return self.select()
