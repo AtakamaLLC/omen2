@@ -229,6 +229,11 @@ def test_cache():
     mgr.cars = cars
     mgr.cars.add(Car(gas_level=2, color="green"))
     mgr.cars.add(Car(gas_level=3, color="green"))
+
+    assert cars.select_one(id=1)
+
+    assert cars.count() == 2
+
     assert orig._cache
 
     mgr.db.insert("cars", id=99, gas_level=99, color="green")

@@ -18,12 +18,3 @@ class MyOmen(Omen):
             create table blobs(oid blob primary key, data blob not null, num double, boo boolean);
             create table whatever(any primary key);
         """
-
-    @classmethod
-    def migrate(cls, db, version):
-        # you should create a migration for each version
-        assert False
-
-    def restore(self, backup_info):
-        # you should create a restore function
-        assert False

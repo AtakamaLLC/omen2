@@ -60,13 +60,11 @@ class Omen(abc.ABC):
             cls.__multi_query(db, cls.schema(cls.version))
             cls.model: DbModel = db.model()
 
-    def __init__(self, db: DbBase, migrate=True, **table_types):
+    def __init__(self, db: DbBase, **table_types):
         """Create a new manager with a db connection."""
         self.tables = {}
         self.db = db
 
-        if migrate:
-            self._migrate_if_needed()
         self._create_if_needed()
 
         self.table_types.update(table_types)
@@ -189,39 +187,8 @@ class Omen(abc.ABC):
         if not mod1 == mod2:
             self.__multi_query(self.db, self.schema(self.version))
 
-    def _migrate_if_needed(self):
-        if self.version is None:
-            return
-
-        # omen, built-in version management
-        self.db.query("create table if not exists _omen(version text);")
-        omen_info = self.db.select_one("_omen")
-
-        if omen_info:
-            restore_info = self.backup()
-            try:
-                next_version = omen_info.version
-                while omen_info.version != self.version:
-                    next_version += 1
-                    self.migrate(self.db, next_version)
-                    self.db.upsert_all("_omen", version=next_version)
-            finally:
-                self.restore(restore_info)
-
     @classmethod
     @abc.abstractmethod
     def schema(cls, version):
         """Override this to return a schema for a given version."""
         ...
-
-    def migrate(self, db, version):
-        """Override this to support migration."""
-        raise NotImplementedError
-
-    def restore(self, backup_info: Any):
-        """Override this to support backup and recovery during migration."""
-        raise NotImplementedError
-
-    def backup(self) -> Any:
-        """Override this to support backup and recovery during migration."""
-        return object()
