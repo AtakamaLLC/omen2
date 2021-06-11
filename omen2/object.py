@@ -6,7 +6,7 @@ from typing import Type, TYPE_CHECKING, Optional, Tuple
 
 from dataclasses import dataclass
 
-from .errors import OmenError, OmenMoreThanOneError, OmenNoPkError
+from .errors import OmenUseWithError, OmenMoreThanOneError, OmenNoPkError
 from .relation import Relation
 
 if TYPE_CHECKING:
@@ -157,7 +157,7 @@ class ObjBase:
             return
 
         if self._meta and self._meta.table and not self._meta.locked:
-            raise OmenError("use with: protocol for bound objects")
+            raise OmenUseWithError("use with: protocol for bound objects")
 
         if self._meta and not hasattr(self, k):
             raise AttributeError("Attribute %s not defined" % k)

@@ -10,7 +10,12 @@ from notanorm.errors import IntegrityError
 
 from omen2 import Omen, ObjBase
 from omen2.table import ObjCache, Table
-from omen2.errors import OmenNoPkError, OmenKeyError, OmenMoreThanOneError
+from omen2.errors import (
+    OmenNoPkError,
+    OmenKeyError,
+    OmenMoreThanOneError,
+    OmenUseWithError,
+)
 from tests.schema import MyOmen
 
 # by calling force, code will always be regenerated... otherwise it's only regenerated if the import fails
@@ -195,6 +200,15 @@ def test_nodup():
     car = mgr[Cars].add(Car(gas_level=2))
     with pytest.raises(IntegrityError):
         mgr[Cars].add(Car(id=car.id, gas_level=3))
+
+
+def test_need_with():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car = mgr.cars.add(Car(gas_level=2))
+    with pytest.raises(OmenUseWithError):
+        car.doors = "green"
 
 
 def test_shortcut_syntax():
@@ -564,3 +578,27 @@ def test_override_for_keywords():
     mgr.load_dict(data_set)
     dumped = mgr.dump_dict()
     assert dumped == data_set
+
+
+def test_unbound_basics():
+    c1 = Car(id=4, color="green", gas_level=5)
+    c2 = Car(id=5, color="green", gas_level=5)
+    s = {c1, c2}
+    assert c1 in s
+    assert c2 in s
+    assert c1 != c2
+    cx = Car(id=4, color="green", gas_level=5)
+
+    # equality is defined by primary key equality
+    assert cx == c1
+
+    dct = c1._to_db()
+    assert str(c1) == str(dct)
+
+    cx.id = None
+    with pytest.raises(OmenNoPkError):
+        _ = {cx}
+
+    # ok to use with on unbound - does nothing
+    with c1:
+        pass

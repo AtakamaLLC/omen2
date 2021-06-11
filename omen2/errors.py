@@ -21,4 +21,8 @@ class OmenKeyError(OmenError, KeyError):
     pass
 
 
+class OmenUseWithError(OmenError):
+    pass
+
+
 IntegrityError = notanorm.errors.IntegrityError
