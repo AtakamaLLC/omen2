@@ -1,4 +1,5 @@
 from omen2.object import ObjBase
+from omen2.errors import OmenKeyError
 
 from typing import (
     TypeVar,
@@ -130,12 +131,6 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         self.table_type = types[0]
         self.table_type_2 = types[1]
 
-        # if the number of fields in the m2m table are the same as the number of
-        # clauses in th relationship, we don't need to mix-in
-        self.need_mixin = len(self.table_type.field_names) > (
-            len(where[0]) + len(where[1])
-        )
-
         # always cascade m2m table deletions and pk updates
         super().__init__(_from, where=rel_where, cascade=True)
 
@@ -170,7 +165,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
                     kws2[k] = kws.pop(k)
             obj = self.table_2.get(obj_or_id, **kws2)
             if not obj:
-                raise ValueError
+                raise OmenKeyError("%s not found", self.table_2.table_name)
         else:
             obj = obj_or_id
 
@@ -180,10 +175,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         res = self.table.new(**kws)
         super().add(res)
 
-        if self.need_mixin:
-            return M2MMixObj(res, obj)
-        else:
-            return obj
+        return M2MMixObj(res, obj)
 
     def select(self, _where={}, **kws) -> Iterable[Union[T2, M2MMixObj[T1, T2]]]:
         kws2 = {}
@@ -197,10 +189,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
             self.__resolve_where(kws2, side=1, obj=rel, invert=True)
             for sub in self.table_2.select(kws2):
                 if sub._matches(kws3):
-                    if self.need_mixin:
-                        yield M2MMixObj(sub, rel)
-                    else:
-                        yield sub
+                    yield M2MMixObj(sub, rel)
 
     def __call__(self, _id=None, **kws) -> Optional[Union[T2, M2MMixObj[T1, T2]]]:
         # noinspection PyProtectedMember
@@ -214,6 +203,8 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         if not isinstance(obj_or_id, (ObjBase, M2MMixObj)) or not obj_or_id:
             # we have to call "get" to get the obj
             obj = self.get(obj_or_id, None, **kws)
+            if obj is None:
+                return
         else:
             obj = obj_or_id
         obj = self.select_one(**obj._to_pk())
