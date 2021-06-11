@@ -16,7 +16,7 @@ class Harbinger(Omen):
 
 
 Harbinger.codegen(force=True)
-from . import test_omen_gen as module
+from . import test_m2mhelper_gen as module
 
 # noinspection PyShadowingBuiltins
 class Group(module.groups_row):
