@@ -17,8 +17,8 @@ from .relation import Relation
 if TYPE_CHECKING:
     from omen2 import Omen, Table, Relation
 
-T1 = TypeVar("T1")
-T2 = TypeVar("T2")
+T1 = TypeVar("T1", bound="ObjBase")
+T2 = TypeVar("T2", bound="ObjBase")
 
 
 class M2MMixObj(Generic[T1, T2]):
@@ -37,6 +37,9 @@ class M2MMixObj(Generic[T1, T2]):
         self._obj1 = obj1
         self._obj2 = obj2
         self.__ready = True
+
+    def __repr__(self):
+        return self.__class__.__name__ + repr((self._obj1, self._obj2))
 
     def __getattr__(self, key):
         if hasattr(self._obj2, key):
@@ -67,18 +70,12 @@ class M2MMixObj(Generic[T1, T2]):
         return self._obj1 == other._obj1 and self._obj2 == other._obj2
 
     def __lt__(self, other: "M2MMixObj"):
-        return (
-            self._obj2 < other._obj2
-            or self._obj2 == other._obj2
-            and self._obj1 < other._obj1
+        ret = (
+            self._obj1 < other._obj1
+            or self._obj1 == other._obj1
+            and self._obj2 < other._obj2
         )
-
-    def __gt__(self, other: "M2MMixObj"):
-        return (
-            self._obj2 > other._obj2
-            or self._obj2 == other._obj2
-            and self._obj1 > other._obj1
-        )
+        return ret
 
 
 # noinspection PyProtectedMember,PyDefaultArgument
@@ -107,6 +104,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
 
     @property
     def row_type_2(self):
+        """Row type of the related table."""
         return self.table_type_2.row_type
 
     def __init__(
@@ -116,6 +114,15 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         types: Tuple[Type["Table[T1]"], Type["Table[T2]"]],
         where: Tuple[dict, dict]
     ):
+        """
+        A "where_dict" is a dictionary describing the relationship:
+        For example:
+            self.Peeps = M2MHelper(types=(GroupPeeps, Peep), where=({"group_id": "id"}, "peep_id": "id"}))
+        Args:
+            _from:  Source object
+            types:  tuple(M2M Table Type, Related Table Type)
+            where:  tuple(where_dict for self, where_dict for related)
+        """
         self.__field_map = where
         self.__table2 = None
 
@@ -136,6 +143,10 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
 
     @property
     def table_2(self):
+        """Table-instance of the related table.
+
+        Memoized getter/shortcut.
+        """
         if not self.__table2:
             mgr: "Omen" = self._from._meta.table.manager
             self.__table2: "Table" = mgr.get_table_by_name(self.table_type_2.table_name)
@@ -145,6 +156,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
     def __resolve_where(
         self, resolved, *, side: int, obj: "ObjBase" = None, invert: bool
     ):
+        """Convert keywords between relation table and the related tables."""
         for k, v in self.__field_map[side].items():
             if invert:
                 resolved[v] = getattr(obj, k)
@@ -155,6 +167,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
                     resolved[k] = getattr(obj, v)
 
     def add(self, obj_or_id: T2 = None, **kws) -> Union[T2, M2MMixObj[T1, T2]]:
+        """Add a member of the m2m list, with extra kws for the m2m row."""
         if obj_or_id is None or not isinstance(obj_or_id, (M2MMixObj, ObjBase)):
             # we have to call "get" on table 2, to get the obj
             # but we want to only use the primary keys of table 2
@@ -178,6 +191,10 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         return M2MMixObj(res, obj)
 
     def select(self, _where={}, **kws) -> Iterable[Union[T2, M2MMixObj[T1, T2]]]:
+        """Select a member of the m2m list.
+
+        Returns mixin objects that represents the relation.
+        """
         kws2 = {}
         for k in kws.copy():
             if k not in self.table_type.field_names:
@@ -189,7 +206,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
             self.__resolve_where(kws2, side=1, obj=rel, invert=True)
             for sub in self.table_2.select(kws2):
                 if sub._matches(kws3):
-                    yield M2MMixObj(sub, rel)
+                    yield M2MMixObj(rel, sub)
 
     def __call__(self, _id=None, **kws) -> Optional[Union[T2, M2MMixObj[T1, T2]]]:
         # noinspection PyProtectedMember

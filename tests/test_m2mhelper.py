@@ -23,10 +23,13 @@ class Group(module.groups_row):
     def __init__(self, id=None, data=None):
         self.peeps = M2MHelper(
             self,
-            types=(module.group_peeps, Peeps),
+            types=(GroupPeeps, Peeps),
             where=({"groupid": "id"}, {"peepid": "id"}),
         )
         super().__init__(id=id, data=data)
+
+    def __lt__(self, other: "Group"):
+        return self.data < other.data
 
 
 # noinspection PyShadowingBuiltins
@@ -34,10 +37,13 @@ class Peep(module.peeps_row):
     def __init__(self, id=None, data=None):
         self.groups = M2MHelper(
             self,
-            types=(module.group_peeps, Groups),
+            types=(GroupPeeps, Groups),
             where=({"peepid": "id"}, {"groupid": "id"}),
         )
         super().__init__(id=id, data=data)
+
+    def __lt__(self, other: "Peep"):
+        return self.data < other.data
 
 
 class Groups(module.groups[Group]):
@@ -46,6 +52,15 @@ class Groups(module.groups[Group]):
 
 class Peeps(module.peeps[Peep]):
     row_type = Peep
+
+
+class GroupPeep(module.group_peeps_row):
+    def __lt__(self, other: "GroupPeep"):
+        return self.role < other.role
+
+
+class GroupPeeps(module.group_peeps):
+    row_type = GroupPeep
 
 
 def test_m2m_multi_inherit():
@@ -122,3 +137,33 @@ def test_m2m_add():
     grp1.peeps.remove(peep1.id)
     grp1.peeps.remove(peep1.id)
     assert grp1.peeps.get(peep1.id) is None
+
+
+def test_m2m_subsorts():
+    db = SqliteDb(":memory:")
+    mgr = Harbinger(db, groups=Groups, peeps=Peeps, group_peeps=GroupPeeps)
+    mgr.groups = Groups(mgr)
+    mgr.peeps = mgr[Peeps]
+    grp1 = mgr.groups.new(id=1, data="g1")
+    peep1 = mgr.peeps.new(id=2, data="p1")
+    peep2 = mgr.peeps.new(id=3, data="p2")
+    peep3 = mgr.peeps.new(id=4, data="p3")
+    peep4 = mgr.peeps.new(id=5, data="p0")
+
+    # should sort by role, and then by peep
+    mix4 = grp1.peeps.add(peep4, role="role3")
+    mix2 = grp1.peeps.add(peep1, role="role2")
+    mix3 = grp1.peeps.add(peep2, role="role2")
+    mix1 = grp1.peeps.add(peep3, role="role1")
+
+    # add function sort
+    all = [mix1, mix2, mix3, mix4]
+    srt = sorted(all)
+    expect = [mix1, mix2, mix3, mix4]
+
+    assert srt == expect
+
+    # select function sort
+    srt = sorted(grp1.peeps)
+
+    assert srt == expect
