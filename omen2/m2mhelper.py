@@ -178,7 +178,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
                     kws2[k] = kws.pop(k)
             obj = self.table_2.get(obj_or_id, **kws2)
             if not obj:
-                raise OmenKeyError("%s not found", self.table_2.table_name)
+                raise OmenKeyError("%s not found" % self.table_2.table_name)
         else:
             obj = obj_or_id
 
