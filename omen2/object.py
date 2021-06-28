@@ -77,6 +77,7 @@ class ObjBase:
         return cls(**dct)
 
     def _link_custom_types(self):
+        """Any values derived from CustomType will track-changes through to the parent object."""
         for k, v in self.__dict__.items():
             if isinstance(v, CustomType):
                 # pylint: disable=attribute-defined-outside-init
