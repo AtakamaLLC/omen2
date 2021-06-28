@@ -69,10 +69,10 @@ class Table(Selectable[T]):
         vals = obj._to_pk()
         self.db.delete(self.table_name, **vals)
 
-    def update(self, obj: T):
+    def update(self, obj: T, keys: Iterable[str]):
         """Add object to db + cache"""
         self._add_cache(obj)
-        vals = obj._to_db()
+        vals = obj._to_db(keys)
         if obj._meta.pk:
             self.db.upsert(self.table_name, obj._meta.pk, **vals)
         else:

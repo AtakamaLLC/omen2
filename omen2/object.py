@@ -1,12 +1,13 @@
 # pylint: disable=protected-access
 
 import logging
+import threading
 from threading import RLock
-from typing import Type, TYPE_CHECKING, Optional, Tuple
+from typing import Type, TYPE_CHECKING, Optional, Tuple, Iterable, Dict, Any
 
 from dataclasses import dataclass
 
-from .errors import OmenUseWithError, OmenMoreThanOneError, OmenNoPkError
+from .errors import OmenUseWithError, OmenNoPkError
 from .relation import Relation
 
 if TYPE_CHECKING:
@@ -23,7 +24,9 @@ class ObjMeta:
     new = True
     table: Optional["Table"] = None
     pk = None
-    restore = None
+    in_commit = False
+    lock_id = 0
+    changes: Dict[str, Any] = None
 
 
 # noinspection PyCallingNonCallable,PyProtectedMember
@@ -67,7 +70,6 @@ class ObjBase:
 
     def _save_pk(self):
         self._meta.pk = self._to_pk()
-        self._meta.restore = self._to_db()
 
     @classmethod
     def _from_db(cls, dct):
@@ -103,10 +105,11 @@ class ObjBase:
             table = manager[self._table_type]
         self._meta.table = table
 
-    def _to_db(self):
+    def _to_db(self, keys: Iterable[str] = None):
         """Get dict of serialized data from self."""
         ret = {}
-        for k in self._table_type.field_names:
+        keys = keys or self._table_type.field_names
+        for k in keys:
             v = getattr(self, k)
             if v is None:
                 continue
@@ -151,6 +154,19 @@ class ObjBase:
                 need_id_field = field
         return need_id_field
 
+    def __getattribute__(self, k):
+        if k[0] == "_":
+            return super().__getattribute__(k)
+
+        if (
+            self._meta
+            and self._meta.locked
+            and self._meta.lock_id == threading.get_ident()
+        ):
+            return self._meta.changes.get(k, super().__getattribute__(k))
+
+        return super().__getattribute__(k)
+
     def __setattr__(self, k, v):
         if k[0] == "_":
             super().__setattr__(k, v)
@@ -161,7 +177,11 @@ class ObjBase:
 
         if self._meta and not hasattr(self, k):
             raise AttributeError("Attribute %s not defined" % k)
-        super().__setattr__(k, v)
+
+        if self._meta and self._meta.locked and not self._meta.in_commit:
+            self._meta.changes[k] = v
+        else:
+            super().__setattr__(k, v)
 
     def _get_related(self):
         related = {}
@@ -188,11 +208,31 @@ class ObjBase:
                         setattr(self, k, v)
         return {}
 
+    @staticmethod
+    def atomic_apply(obj, changes: Dict[str, Any]):
+        """Atomically apply a dictionary of changes to a python object."""
+        tmpobj = obj.__new__(type(obj))  # new obj, no __init__
+        tmpobj.__dict__ = obj.__dict__.copy()  # copy all attrs to new obj
+        for k, v in changes.items():
+            setattr(tmpobj, k, v)
+        obj.__dict__ = tmpobj.__dict__  # swap in new dict (atomic)
+
     def _commit(self):
+        changes = []
+
+        if self._meta:
+            # bound-to-db
+            self._meta.in_commit = True
+            if self._meta.changes:
+                changes = (
+                    self._meta.changes
+                )  # apply changes to new obj, side effects of setters, etc
+                self.atomic_apply(self, changes)
+                self._meta.changes = {}
+
         cascade = self._collect_cascade() if self._cascade else {}
 
-        if self._meta.table:
-            self._save()
+        self._save(changes)
 
         for val in self.__dict__.values():
             if isinstance(val, Relation):
@@ -213,29 +253,24 @@ class ObjBase:
             for obj in objs:
                 rel.remove(obj)
 
-    def _save(self):
+    def _save(self, keys: Iterable[str]):
         need_id_field = self._need_id()
         table = self._meta.table
         if need_id_field or self._meta.new:
             table.insert(self, need_id_field)
-        else:
-            table.update(self)
+        elif keys:
+            table.update(self, keys)
 
         self._meta.new = False
         self._save_pk()
-
-    def _rollback(self):
-        pk = self._to_pk()
-        db_row = self._meta.table.db_select(pk)
-        if db_row:
-            if len(db_row) > 1:
-                raise OmenMoreThanOneError("more than 1 %s in the db" % self.__class__)
-        self._update(db_row[0])
 
     def __enter__(self):
         if self._meta and self._meta.table:
             self._meta.lock.acquire()
             self._meta.locked = True
+            self._meta.in_commit = False
+            self._meta.changes = {}
+            self._meta.lock_id = threading.get_ident()
         return self
 
     def __exit__(self, typ, val, ex):
@@ -243,10 +278,10 @@ class ObjBase:
         if not self._meta or not self._meta.table:
             return
 
-        if typ:
-            self._rollback()
-        else:
+        if not typ:
             self._commit()
 
         self._meta.locked = False
+        self._meta.changes = None
+        self._meta.lock_id = 0
         self._meta.lock.release()

@@ -1,8 +1,10 @@
 import base64
 import gc
 import logging as log
+import time
 from contextlib import suppress
 from multiprocessing.pool import ThreadPool
+from random import random
 
 import pytest
 from notanorm import SqliteDb
@@ -183,6 +185,18 @@ def test_rollback():
             raise ValueError
 
     assert car.gas_level == 2
+
+
+def test_update_only():
+    db = SqliteDb(":memory:")
+    # upon connection to a database, this will do migration, or creation as needed
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car = mgr.cars.add(Car(id=4, gas_level=2))
+    with car:
+        car.gas_level = 3
+    # id doesn't change in db, because we only update normally-changed attributes
+    assert db.select_one("cars", id=4).gas_level == 3
 
 
 def test_nopk():
@@ -602,3 +616,34 @@ def test_unbound_basics():
     # ok to use with on unbound - does nothing
     with c1:
         pass
+
+
+def test_threaded_reads():
+    db = SqliteDb(":memory:")
+    # upon connection to a database, this will do migration, or creation as needed
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+    car = mgr.cars.add(Car(gas_level=0, color=str(0)))
+    pool = ThreadPool(50)
+
+    # to reproduce the problem with this, you need to catch pything switching contexts
+    # in between setattr calls in a non-atomic "apply" function
+    # this is basically impossible without sticking a time sleep in there
+    # even with 100 attributes and 5000 threads it never failed
+    # so this test case only tests if the atomic apply is totally/deeply broken
+
+    def update_stuff(_i):
+        time.sleep(0.00001)
+        assert car.color == str(car.gas_level)
+        with car:
+            car.gas_level += 1
+            time.sleep(0.00001)
+            car.color = str(car.gas_level)
+        assert car.color == str(car.gas_level)
+        time.sleep(0.00001)
+        assert car.color == str(car.gas_level)
+
+    # lots of threads can update stuff
+    num_t = 10
+    pool.map(update_stuff, range(num_t))
+    assert car.gas_level == num_t
