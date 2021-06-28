@@ -75,7 +75,6 @@ def test_readme(tmp_path):
     fname = str(tmp_path / "test.txt")
     db = SqliteDb(fname)
 
-    # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db)
     mgr.cars = Cars(mgr)
 
@@ -153,7 +152,6 @@ def test_weak_cache(caplog):
 
 def test_threaded():
     db = SqliteDb(":memory:")
-    # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db)
     mgr.cars = Cars(mgr)
     car = mgr.cars.add(Car(gas_level=0))
@@ -174,7 +172,6 @@ def test_threaded():
 
 def test_rollback():
     db = SqliteDb(":memory:")
-    # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
     mgr.cars = mgr[Cars]
     car = mgr.cars.add(Car(gas_level=2))
@@ -189,19 +186,22 @@ def test_rollback():
 
 def test_update_only():
     db = SqliteDb(":memory:")
-    # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
     mgr.cars = mgr[Cars]
     car = mgr.cars.add(Car(id=4, gas_level=2))
     with car:
         car.gas_level = 3
-    # id doesn't change in db, because we only update normally-changed attributes
+        # hack in the color....
+        car.__dict__["color"] = "blue"
+        assert "gas_level" in car._meta.changes
+        assert "color" not in car._meta.changes
+    # color doesn't change in db, because we only update "normally-changed" attributes
     assert db.select_one("cars", id=4).gas_level == 3
+    assert db.select_one("cars", id=4).color == "black"
 
 
 def test_nopk():
     db = SqliteDb(":memory:")
-    # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
     with pytest.raises(OmenNoPkError):
         mgr[gen_objs.doors].add(gen_objs.doors_row(carid=None, type=None))
@@ -209,7 +209,6 @@ def test_nopk():
 
 def test_nodup():
     db = SqliteDb(":memory:")
-    # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
     car = mgr[Cars].add(Car(gas_level=2))
     with pytest.raises(IntegrityError):
@@ -227,7 +226,6 @@ def test_need_with():
 
 def test_shortcut_syntax():
     db = SqliteDb(":memory:")
-    # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
     car = mgr[Cars].new(gas_level=2)
     assert car
@@ -246,7 +244,6 @@ def test_shortcut_syntax():
 
 def test_cache():
     db = SqliteDb(":memory:")
-    # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
     mgr.cars = Cars(mgr)
     orig = mgr.cars
@@ -292,7 +289,6 @@ def test_cache():
 
 def test_iter_and_sort():
     db = SqliteDb(":memory:")
-    # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
     mgr.cars = mgr[Cars]
     mgr.cars.add(Car(gas_level=2, color="green"))
@@ -314,7 +310,6 @@ def test_iter_and_sort():
 
 def test_cascade_relations():
     db = SqliteDb(":memory:")
-    # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
     mgr.cars = mgr[Cars]
     car = mgr.cars.add(Car(id=1, gas_level=2, color="green"))
@@ -343,7 +338,6 @@ def test_cascade_relations():
 
 def test_remove_driver():
     db = SqliteDb(":memory:")
-    # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db, cars=Cars)
     mgr.cars = mgr[Cars]
     mgr.car_drivers = CarDrivers(mgr)
@@ -620,7 +614,6 @@ def test_unbound_basics():
 
 def test_threaded_reads():
     db = SqliteDb(":memory:")
-    # upon connection to a database, this will do migration, or creation as needed
     mgr = MyOmen(db)
     mgr.cars = Cars(mgr)
     car = mgr.cars.add(Car(gas_level=0, color=str(0)))
