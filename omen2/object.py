@@ -209,7 +209,7 @@ class ObjBase:
         return {}
 
     @staticmethod
-    def atomic_apply(obj, changes: Dict[str, Any]):
+    def _atomic_apply(obj, changes: Dict[str, Any]):
         """Atomically apply a dictionary of changes to a python object."""
         tmpobj = obj.__new__(type(obj))  # new obj, no __init__
         tmpobj.__dict__ = obj.__dict__.copy()  # copy all attrs to new obj
@@ -227,7 +227,7 @@ class ObjBase:
                 changes = (
                     self._meta.changes
                 )  # apply changes to new obj, side effects of setters, etc
-                self.atomic_apply(self, changes)
+                self._atomic_apply(self, changes)
                 self._meta.changes = {}
 
         cascade = self._collect_cascade() if self._cascade else {}
