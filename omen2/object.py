@@ -76,10 +76,17 @@ class ObjBase:
         """Override this if you want to change how deserialization works."""
         return cls(**dct)
 
+    def _link_custom_types(self):
+        for k, v in self.__dict__.items():
+            if isinstance(v, CustomType):
+                v._parent = self
+                v._field = k
+
     @classmethod
     def _from_db_not_new(cls, dct):
         """Override this if you want to change how deserialization works."""
         ret = cls._from_db(dct)
+        ret._link_custom_types()
         ret._meta.new = False
         ret._save_pk()
         return ret
@@ -116,6 +123,7 @@ class ObjBase:
             if hasattr(v, "_to_db"):
                 # pylint: disable=no-member
                 v = v._to_db()
+
             ret[k] = v
         return ret
 
@@ -214,7 +222,8 @@ class ObjBase:
         tmpobj = obj.__new__(type(obj))  # new obj, no __init__
         tmpobj.__dict__ = obj.__dict__.copy()  # copy all attrs to new obj
         for k, v in changes.items():
-            setattr(tmpobj, k, v)
+            if k != "_meta":
+                setattr(tmpobj, k, v)
         obj.__dict__ = tmpobj.__dict__  # swap in new dict (atomic)
 
     def _commit(self):
@@ -241,6 +250,8 @@ class ObjBase:
         for rel, objs in cascade.items():
             for obj in objs:
                 rel._link_obj(obj)
+
+        self._link_custom_types()
 
     def _remove(self):
         cascade = self._get_related() if self._cascade else {}
@@ -285,3 +296,13 @@ class ObjBase:
         self._meta.changes = None
         self._meta.lock_id = 0
         self._meta.lock.release()
+
+
+class CustomType:
+    _parent = None
+    _field = None
+
+    def __setattr__(self, key, value):
+        super().__setattr__(key, value)
+        if self._parent and self._field and key[0] != "_":
+            setattr(self._parent, self._field, self)

@@ -10,6 +10,7 @@ from notanorm import SqliteDb
 from notanorm.errors import IntegrityError
 
 from omen2 import Omen, ObjBase
+from omen2.object import CustomType
 from omen2.table import ObjCache, Table
 from omen2.errors import (
     OmenNoPkError,
@@ -500,7 +501,8 @@ def test_custom_data_type():
 
     db = SqliteDb(":memory:")
 
-    class Custom:
+    class Custom(CustomType):
+        # by deriving from CustomType, we track-changes properly
         def __init__(self, a, b):
             self.a = a
             self.b = b
@@ -525,9 +527,16 @@ def test_custom_data_type():
     assert bas.data.a == "a"
     assert bas.data.b == "b"
     with bas:
-        bas.data.a = "z"
+        bas.data = Custom("z", "b")
     bas = mgr.basic.select_one(id=1)
     assert bas.data.a == "z"
+
+    # if you don't derive from CustomType, then this will not work
+    with bas:
+        # partial change to object is tracked as change to main data type
+        bas.data.a = "x"
+    bas = mgr.basic.select_one(id=1)
+    assert bas.data.a == "x"
 
 
 def test_override_for_keywords():
