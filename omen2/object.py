@@ -79,6 +79,7 @@ class ObjBase:
     def _link_custom_types(self):
         for k, v in self.__dict__.items():
             if isinstance(v, CustomType):
+                # pylint: disable=attribute-defined-outside-init
                 v._parent = self
                 v._field = k
 
