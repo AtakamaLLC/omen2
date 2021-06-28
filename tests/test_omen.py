@@ -618,7 +618,7 @@ def test_threaded_reads():
     car = mgr.cars.add(Car(gas_level=0, color=str(0)))
     pool = ThreadPool(50)
 
-    # to reproduce the problem with this, you need to catch pything switching contexts
+    # to reproduce the problem with this, you need to catch python while switching contexts
     # in between setattr calls in a non-atomic "apply" function
     # this is basically impossible without sticking a time sleep in there
     # even with 100 attributes and 5000 threads it never failed
