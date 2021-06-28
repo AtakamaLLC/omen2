@@ -4,7 +4,6 @@ import logging as log
 import time
 from contextlib import suppress
 from multiprocessing.pool import ThreadPool
-from random import random
 
 import pytest
 from notanorm import SqliteDb
@@ -640,3 +639,41 @@ def test_threaded_reads():
     num_t = 10
     pool.map(update_stuff, range(num_t))
     assert car.gas_level == num_t
+
+
+def test_setter_getter():
+    # noinspection PyAbstractClass
+    class Harbinger(Omen):
+        @classmethod
+        def schema(cls, version):
+            return "create table basic (id integer primary key, data text)"
+
+    db = SqliteDb(":memory:")
+
+    class Basic(InlineBasic):
+        __data = None
+
+        @property
+        def data(self):
+            return self.__data
+
+        @data.setter
+        def data(self, val):
+            self.__data = str(val)
+
+    # tests bootstrapping
+    class Basics(Table[Basic]):
+        pass
+
+    mgr = Harbinger(db, basic=Basics)
+    mgr.basic = Basics(mgr)
+    mgr.basic.new(id=1, data="someval")
+    bas = mgr.basic.select_one(id=1)
+    assert bas.data == "someval"
+
+    # bypass normal checks
+    bas._Basic__data = "otherval"
+
+    # reread-from db overrides/fixes cached objects atomically
+    mgr.basic.select_one(id=1)
+    assert bas.data == "someval"

@@ -107,8 +107,8 @@ class Table(Selectable[T]):
                 already = cached._to_db()
                 if update != already:
                     log.debug("updating %s from db", repr(obj))
-                    with obj:
-                        obj._update(update)
+                    with cached:
+                        cached._update(update)
                 obj = cached
             else:
                 obj._bind(table=self)

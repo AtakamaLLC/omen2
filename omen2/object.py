@@ -98,7 +98,7 @@ class ObjBase:
         return True
 
     def _update(self, dct):
-        self.__dict__.update(dct)
+        self._atomic_apply(self, dct)
 
     def _bind(self, table: "Table" = None, manager: "Omen" = None):
         if table is None:
