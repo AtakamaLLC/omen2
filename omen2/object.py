@@ -6,6 +6,7 @@ from threading import RLock
 from typing import Type, TYPE_CHECKING, Optional, Tuple, Iterable, Dict, Any
 
 from dataclasses import dataclass
+from contextlib import contextmanager
 
 from .errors import OmenUseWithError, OmenNoPkError
 from .relation import Relation
@@ -24,8 +25,9 @@ class ObjMeta:
     new = True
     table: Optional["Table"] = None
     pk = None
-    in_commit = False
     lock_id = 0
+    suppress_set_changes = False
+    suppress_get_changes = False
     changes: Dict[str, Any] = None
 
 
@@ -37,7 +39,7 @@ class ObjBase:
     _table_type: Type["Table"]  # class derived from Table
 
     # objects should only have 1 variable in __dict__
-    _meta: ObjMeta = None
+    __meta: ObjMeta = None
 
     def __eq__(self, obj):
         return obj._to_pk() == self._to_pk()
@@ -63,13 +65,21 @@ class ObjBase:
 
     def __init__(self, **kws):
         """Override this to control initialization, generally calling it *after* you do your own init."""
-        self._meta = ObjMeta()
-        self._meta.lock = RLock()
+        self.__meta = ObjMeta()
+        self.__meta.lock = RLock()
         self._check_kws(kws)
-        self._meta.new = True
+        self.__meta.new = True
 
     def _save_pk(self):
-        self._meta.pk = self._to_pk()
+        self.__meta.pk = self._to_pk()
+
+    @property
+    def _changes(self):
+        return self.__meta.changes
+
+    @property
+    def _saved_pk(self):
+        return self.__meta.pk
 
     @classmethod
     def _from_db(cls, dct):
@@ -89,7 +99,7 @@ class ObjBase:
         """Override this if you want to change how deserialization works."""
         ret = cls._from_db(dct)
         ret._link_custom_types()
-        ret._meta.new = False
+        ret.__meta.new = False
         ret._save_pk()
         return ret
 
@@ -106,28 +116,66 @@ class ObjBase:
                 return False
         return True
 
-    def _update(self, dct):
-        self._atomic_apply(self, dct)
+    def _update_from_object(self, obj):
+        update = {
+            k: v
+            for k, v in obj.__dict__.items()
+            if not isinstance(v, Relation) and not k.startswith("_ObjBase__")
+        }
+        self._atomic_apply(self, update)
 
     def _bind(self, table: "Table" = None, manager: "Omen" = None):
         if table is None:
             table = manager[self._table_type]
-        self._meta.table = table
+        self._table = table
+
+    @property
+    def _is_bound(self) -> bool:
+        # important to cast this for better errors
+        return bool(self.__meta and self.__meta.table)
+
+    @property
+    def _is_new(self) -> bool:
+        return self.__meta and self.__meta.new
+
+    @property
+    def _table(self):
+        return self.__meta.table
+
+    @_table.setter
+    def _table(self, val):
+        self.__meta.table = val
+
+    def _manager(self):
+        return self.__meta.table.manager
+
+    @contextmanager
+    def _suppress_get_changes(self):
+        self.__meta.suppress_get_changes = True
+        yield self
+        self.__meta.suppress_get_changes = False
+
+    @contextmanager
+    def _suppress_set_changes(self):
+        self.__meta.suppress_set_changes = True
+        yield self
+        self.__meta.suppress_set_changes = False
 
     def _to_db(self, keys: Iterable[str] = None):
         """Get dict of serialized data from self."""
         ret = {}
         keys = keys or self._table_type.field_names
-        for k in keys:
-            v = getattr(self, k)
-            if v is None:
-                continue
-            if hasattr(v, "_to_db"):
-                # pylint: disable=no-member
-                v = v._to_db()
+        with self._suppress_get_changes():
+            for k in keys:
+                v = getattr(self, k)
+                if v is None:
+                    continue
+                if hasattr(v, "_to_db"):
+                    # pylint: disable=no-member
+                    v = v._to_db()
 
-            ret[k] = v
-        return ret
+                ret[k] = v
+            return ret
 
     def _to_pk(self):
         """Get dict of serialized data from self, but pk elements only.
@@ -169,11 +217,12 @@ class ObjBase:
             return super().__getattribute__(k)
 
         if (
-            self._meta
-            and self._meta.locked
-            and self._meta.lock_id == threading.get_ident()
+            self.__meta
+            and self.__meta.locked
+            and self.__meta.lock_id == threading.get_ident()
+            and not self.__meta.suppress_get_changes
         ):
-            return self._meta.changes.get(k, super().__getattribute__(k))
+            return self.__meta.changes.get(k, super().__getattribute__(k))
 
         return super().__getattribute__(k)
 
@@ -182,16 +231,16 @@ class ObjBase:
             super().__setattr__(k, v)
             return
 
-        if self._meta:
-            if self._meta.table and not self._meta.locked:
+        if self.__meta and not self.__meta.suppress_set_changes:
+            if self.__meta.table and not self.__meta.locked:
                 raise OmenUseWithError("use with: protocol for bound objects")
-            if self._meta.lock_id != threading.get_ident():
+            if self.__meta.table and self.__meta.lock_id != threading.get_ident():
                 raise OmenUseWithError("use with: protocol for bound objects")
             if not hasattr(self, k):
                 raise AttributeError("Attribute %s not defined" % k)
 
-        if self._meta and not self._meta.in_commit:
-            self._meta.changes[k] = v
+        if self._is_bound and not self.__meta.suppress_set_changes:
+            self.__meta.changes[k] = v
         else:
             super().__setattr__(k, v)
 
@@ -208,10 +257,10 @@ class ObjBase:
         # we save a list of all related objects here
         # and then later, we go throught and update all of them
         # because we don't know what the lambda-relationship is
-        if self._meta.pk:
+        if self.__meta.pk:
             pk = self._to_pk()
-            if pk != self._meta.pk:
-                for k, v in self._meta.pk.items():
+            if pk != self.__meta.pk:
+                for k, v in self.__meta.pk.items():
                     setattr(self, k, v)
                 try:
                     return self._get_related()
@@ -225,23 +274,24 @@ class ObjBase:
         """Atomically apply a dictionary of changes to a python object."""
         tmpobj = obj.__new__(type(obj))  # new obj, no __init__
         tmpobj.__dict__ = obj.__dict__.copy()  # copy all attrs to new obj
-        for k, v in changes.items():
-            if k != "_meta":
-                setattr(tmpobj, k, v)
+        tmpobj._force_apply(changes)
         obj.__dict__ = tmpobj.__dict__  # swap in new dict (atomic)
+
+    def _force_apply(self, changes):
+        # these attribute sets do not go into the changeset
+        # but setters still get triggered normally
+        with self._suppress_set_changes():
+            for k, v in changes.items():
+                setattr(self, k, v)
 
     def _commit(self):
         changes = []
 
-        if self._meta:
-            # bound-to-db
-            self._meta.in_commit = True
-            if self._meta.changes:
-                changes = (
-                    self._meta.changes
-                )  # apply changes to new obj, side effects of setters, etc
-                self._atomic_apply(self, changes)
-                self._meta.changes = {}
+        if self.__meta.changes:
+            # apply changes to new obj, side effects of setters, etc
+            changes = self.__meta.changes
+            self._atomic_apply(self, changes)
+            self.__meta.changes = {}
 
         cascade = self._collect_cascade() if self._cascade else {}
 
@@ -249,7 +299,7 @@ class ObjBase:
 
         for val in self.__dict__.values():
             if isinstance(val, Relation):
-                val.commit(self._meta.table.manager)
+                val.commit(self.__meta.table.manager)
 
         for rel, objs in cascade.items():
             for obj in objs:
@@ -260,8 +310,8 @@ class ObjBase:
     def _remove(self):
         cascade = self._get_related() if self._cascade else {}
 
-        if self._meta.table:
-            table = self._meta.table
+        if self.__meta.table:
+            table = self.__meta.table
             table._remove(self)
 
         for rel, objs in cascade.items():
@@ -270,37 +320,37 @@ class ObjBase:
 
     def _save(self, keys: Iterable[str]):
         need_id_field = self._need_id()
-        table = self._meta.table
-        if need_id_field or self._meta.new:
+        table = self.__meta.table
+        if need_id_field or self.__meta.new:
             table.insert(self, need_id_field)
         elif keys:
             table.update(self, keys)
 
-        self._meta.new = False
+        self.__meta.new = False
         self._save_pk()
 
     def __enter__(self):
-        if self._meta and self._meta.table:
-            self._meta.lock.acquire()
-            self._meta.locked = True
-            self._meta.in_commit = False
-            self._meta.changes = {}
-            self._meta.lock_id = threading.get_ident()
+        if self.__meta and self.__meta.table:
+            self.__meta.lock.acquire()
+            self.__meta.locked = True
+            self.__meta.suppress_set_changes = False
+            self.__meta.changes = {}
+            self.__meta.lock_id = threading.get_ident()
         return self
 
     def __exit__(self, typ, val, ex):
         # unbound objects aren't locked, and don't need the with: protocol
-        if not self._meta or not self._meta.locked:
+        if not self.__meta or not self.__meta.locked:
             return
 
         try:
             if not typ:
                 self._commit()
         finally:
-            self._meta.locked = False
-            self._meta.changes = None
-            self._meta.lock_id = 0
-            self._meta.lock.release()
+            self.__meta.locked = False
+            self.__meta.changes = None
+            self.__meta.lock_id = 0
+            self.__meta.lock.release()
 
 
 class CustomType:

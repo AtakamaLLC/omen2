@@ -34,12 +34,12 @@ class Relation(Selectable[T]):
                     self.add(ent)
 
     def is_bound(self):
-        return self._from._meta and self._from._meta.table
+        return self._from._is_bound
 
     @property
     def table(self):
         if not self.__table:
-            mgr: "Omen" = self._from._meta.table.manager
+            mgr: "Omen" = self._from._table.manager
             self.__table: "Table" = mgr.get_table_by_name(self.table_type.table_name)
             self.table_type = type(self.__table)
         return self.__table
@@ -71,7 +71,7 @@ class Relation(Selectable[T]):
                 yield obj
 
     def _link_obj(self, obj):
-        obj._meta.table = self.table
+        obj._table = self.table
         with obj:
             for k, v in self._where.items():
                 if isinstance(v, Callable):
@@ -82,7 +82,7 @@ class Relation(Selectable[T]):
         if not manager:
             manager = self.table.manager
         for item in self.__saved:
-            if not item._meta.table:
+            if not item._is_bound:
                 item._bind(manager=manager)
             self._link_obj(item)
         self.__saved.clear()

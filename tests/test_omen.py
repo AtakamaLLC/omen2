@@ -110,7 +110,7 @@ def test_readme(tmp_path):
 
     car = mgr.cars.select_one(color="red", gas_level=0.3)
 
-    assert not car._meta.new
+    assert not car._is_new
 
     with car:
         with pytest.raises(AttributeError, match=r".*gas.*"):
@@ -193,8 +193,8 @@ def test_update_only():
         car.gas_level = 3
         # hack in the color....
         car.__dict__["color"] = "blue"
-        assert "gas_level" in car._meta.changes
-        assert "color" not in car._meta.changes
+        assert "gas_level" in car._changes
+        assert "color" not in car._changes
     # color doesn't change in db, because we only update "normally-changed" attributes
     assert db.select_one("cars", id=4).gas_level == 3
     assert db.select_one("cars", id=4).color == "black"
@@ -313,7 +313,7 @@ def test_cascade_relations():
     mgr = MyOmen(db, cars=Cars)
     mgr.cars = mgr[Cars]
     car = mgr.cars.add(Car(id=1, gas_level=2, color="green"))
-    assert not car._meta.new
+    assert not car._is_new
 
     with car:
         car.doors.add(gen_objs.doors_row(type="z"))

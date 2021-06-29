@@ -57,10 +57,10 @@ class Table(Selectable[T]):
                 log.debug("not removing obj, because it is None")
                 return
             obj = self.select_one(**kws)
-        if not obj or not obj._meta or not obj._meta.table:
+        if not obj or not obj._is_bound:
             log.debug("not removing object that isn't in the db")
             return
-        assert obj._meta.table is self
+        assert obj._table is self
         obj._remove()
 
     def _remove(self, obj: "ObjBase"):
@@ -73,8 +73,8 @@ class Table(Selectable[T]):
         """Add object to db + cache"""
         self._add_cache(obj)
         vals = obj._to_db(keys)
-        if obj._meta.pk:
-            self.db.upsert(self.table_name, obj._meta.pk, **vals)
+        if obj._saved_pk:
+            self.db.upsert(self.table_name, obj._saved_pk, **vals)
         else:
             self.db.upsert(self.table_name, **vals)
 
@@ -107,8 +107,7 @@ class Table(Selectable[T]):
                 already = cached._to_db()
                 if update != already:
                     log.debug("updating %s from db", repr(obj))
-                    with cached:
-                        cached._update(obj.__dict__)
+                    cached._update_from_object(obj)
                 obj = cached
             else:
                 obj._bind(table=self)
