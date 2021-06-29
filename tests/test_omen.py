@@ -650,6 +650,36 @@ def test_threaded_reads():
     assert car.gas_level == num_t
 
 
+def test_thread_locked_writer_only():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+    car = mgr.cars.add(Car(gas_level=0, color=str(0)))
+    num_t = 15
+    num_w = 3
+    pool = ThreadPool(num_t)
+
+    # to reproduce the problem with this, you need to catch python while switching contexts
+    # in between setattr calls in a non-atomic "apply" function
+    # this is basically impossible without sticking a time sleep in there
+    # even with 100 attributes and 5000 threads it never failed
+    # so this test case only tests if the atomic apply is totally/deeply broken
+
+    def update_stuff(i):
+        if i < num_w:
+            with car:
+                car.gas_level += 1
+                car.color = str(car.gas_level)
+                time.sleep(0.1)
+        else:
+            with pytest.raises(OmenUseWithError):
+                car.gas_level += 1
+
+    # lots of threads can update stuff
+    pool.map(update_stuff, range(num_t))
+    assert car.gas_level == num_w
+
+
 def test_setter_getter():
     # noinspection PyAbstractClass
     class Harbinger(Omen):

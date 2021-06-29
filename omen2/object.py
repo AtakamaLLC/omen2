@@ -182,13 +182,15 @@ class ObjBase:
             super().__setattr__(k, v)
             return
 
-        if self._meta and self._meta.table and not self._meta.locked:
-            raise OmenUseWithError("use with: protocol for bound objects")
+        if self._meta:
+            if self._meta.table and not self._meta.locked:
+                raise OmenUseWithError("use with: protocol for bound objects")
+            if self._meta.lock_id != threading.get_ident():
+                raise OmenUseWithError("use with: protocol for bound objects")
+            if not hasattr(self, k):
+                raise AttributeError("Attribute %s not defined" % k)
 
-        if self._meta and not hasattr(self, k):
-            raise AttributeError("Attribute %s not defined" % k)
-
-        if self._meta and self._meta.locked and not self._meta.in_commit:
+        if self._meta and not self._meta.in_commit:
             self._meta.changes[k] = v
         else:
             super().__setattr__(k, v)
@@ -288,16 +290,17 @@ class ObjBase:
 
     def __exit__(self, typ, val, ex):
         # unbound objects aren't locked, and don't need the with: protocol
-        if not self._meta or not self._meta.table:
+        if not self._meta or not self._meta.locked:
             return
 
-        if not typ:
-            self._commit()
-
-        self._meta.locked = False
-        self._meta.changes = None
-        self._meta.lock_id = 0
-        self._meta.lock.release()
+        try:
+            if not typ:
+                self._commit()
+        finally:
+            self._meta.locked = False
+            self._meta.changes = None
+            self._meta.lock_id = 0
+            self._meta.lock.release()
 
 
 class CustomType:
