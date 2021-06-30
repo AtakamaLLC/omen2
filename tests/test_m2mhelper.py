@@ -31,6 +31,9 @@ class Group(module.groups_row):
     def __lt__(self, other: "Group"):
         return self.data < other.data
 
+    def same_method(self):
+        return "group"
+
 
 # noinspection PyShadowingBuiltins
 class Peep(module.peeps_row):
@@ -45,6 +48,9 @@ class Peep(module.peeps_row):
     def __lt__(self, other: "Peep"):
         return self.data < other.data
 
+    def same_method(self):
+        return "peep"
+
 
 class Groups(module.groups[Group]):
     row_type = Group
@@ -57,6 +63,9 @@ class Peeps(module.peeps[Peep]):
 class GroupPeep(module.group_peeps_row):
     def __lt__(self, other: "GroupPeep"):
         return self.role < other.role
+
+    def same_method(self):
+        return "group_peep"
 
 
 class GroupPeeps(module.group_peeps):
@@ -85,6 +94,7 @@ def test_m2m_multi_inherit():
     assert res2.data == "p2"
 
     peep1 = grp1.peeps.get(role="role")
+
     peep_by_id = grp1.peeps.get(id=2)
     assert peep_by_id == peep1
 
@@ -138,6 +148,12 @@ def test_m2m_add():
     grp1.peeps.remove(peep1.id)
     assert grp1.peeps.get(peep1.id) is None
 
+    # add/remove obj
+    grp1.peeps.add(peep1)
+    assert grp1.peeps.get(peep1.id)
+    grp1.peeps.remove(peep1)
+    assert grp1.peeps.get(peep1.id) is None
+
 
 def test_m2m_subsorts():
     db = SqliteDb(":memory:")
@@ -155,6 +171,10 @@ def test_m2m_subsorts():
     mix2 = grp1.peeps.add(peep1, role="role2")
     mix3 = grp1.peeps.add(peep2, role="role2")
     mix1 = grp1.peeps.add(peep3, role="role1")
+
+    # check that m2m table properties properly override other props
+    assert peep1.groups(1).same_method() == "group_peep"
+    assert mix1.same_method() == "group_peep"
 
     # add function sort
     all = [mix1, mix2, mix3, mix4]

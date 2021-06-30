@@ -716,3 +716,19 @@ def test_setter_getter():
     # reread-from db overrides/fixes cached objects atomically
     mgr.basic.select_one(id=1)
     assert bas.data == "someval"
+
+
+def test_reload_from_disk():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+    car = mgr.cars.add(Car(gas_level=0, color="green"))
+    assert db.select_one("cars", id=1).color == "green"
+    db.update("cars", id=1, color="blue")
+    # doesn't notice db change because we have a weakref-cache
+    assert car.color == "green"
+    car2 = mgr.cars.select_one(id=1)
+    # weakref cache
+    assert car2 is car
+    # db fills to cache on select
+    assert car.color == "blue"

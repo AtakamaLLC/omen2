@@ -1,4 +1,4 @@
-from typing import TypeVar, Callable, Iterable, TYPE_CHECKING, List
+from typing import TypeVar, Callable, Iterable, TYPE_CHECKING, List, Optional
 
 from .selectable import Selectable
 
@@ -24,7 +24,7 @@ class Relation(Selectable[T]):
 
         self._from = _from
         self._where = where
-        self.__table = None
+        self.__table: Optional[Table] = None
         self.__saved: List["ObjBase"] = []
         if _init:
             for ent in _init:
