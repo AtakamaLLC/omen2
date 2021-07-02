@@ -5,6 +5,7 @@ import time
 from contextlib import suppress
 from multiprocessing.pool import ThreadPool
 
+import notanorm.errors
 import pytest
 from notanorm import SqliteDb
 from notanorm.errors import IntegrityError
@@ -20,8 +21,7 @@ from omen2.errors import (
 )
 from tests.schema import MyOmen
 
-# by calling force, code will always be regenerated... otherwise it's only regenerated if the import fails
-MyOmen.codegen(force=True)
+MyOmen.codegen()
 
 import tests.schema_gen as gen_objs
 
@@ -732,3 +732,17 @@ def test_reload_from_disk():
     assert car2 is car
     # db fills to cache on select
     assert car.color == "blue"
+
+
+def test_update_to_null():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+    car = mgr.cars.add(Car(gas_level=0, color="green"))
+    with car:
+        car.gas_level = None
+    assert db.select_one("cars", id=1).gas_level is None
+    with pytest.raises(notanorm.errors.IntegrityError):
+        with car:
+            car.color = None
+    assert car.color == "green"

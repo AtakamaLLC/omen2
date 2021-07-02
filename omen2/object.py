@@ -66,7 +66,6 @@ class ObjBase:
     def __init__(self, **kws):
         """Override this to control initialization, generally calling it *after* you do your own init."""
         self.__meta = ObjMeta()
-        self.__meta.lock = RLock()
         self._check_kws(kws)
         self.__meta.new = True
 
@@ -168,8 +167,6 @@ class ObjBase:
         with self._suppress_get_changes():
             for k in keys:
                 v = getattr(self, k)
-                if v is None:
-                    continue
                 if hasattr(v, "_to_db"):
                     # pylint: disable=no-member
                     v = v._to_db()
@@ -285,29 +282,40 @@ class ObjBase:
                 setattr(self, k, v)
 
     def _commit(self):
+        """Apply all pending changes to the object, and to the db."""
         changes = []
 
+        # apply all changes to this object & triggers setters
         if self.__meta.changes:
             # apply changes to new obj, side effects of setters, etc
             changes = self.__meta.changes
             self._atomic_apply(self, changes)
             self.__meta.changes = {}
 
+        # collect any primary key-cascading updates
         cascade = self._collect_cascade() if self._cascade else {}
 
+        # save changes to the db
         self._save(changes)
 
+        # commit any changes in unbound relations to the db
         for val in self.__dict__.values():
             if isinstance(val, Relation):
                 val.commit(self.__meta.table.manager)
 
+        # apply any cascading primary-key changes to the db
         for rel, objs in cascade.items():
             for obj in objs:
                 rel._link_obj(obj)
 
+        # custom types can lose their linkage during this process
         self._link_custom_types()
 
     def _remove(self):
+        """Remove myself from my table.
+
+        Normally cascades to related tables, if Class._cascade is true.
+        """
         cascade = self._get_related() if self._cascade else {}
 
         if self.__meta.table:
@@ -319,6 +327,8 @@ class ObjBase:
                 rel.remove(obj)
 
     def _save(self, keys: Iterable[str]):
+        """Save myself to my table."""
+
         need_id_field = self._need_id()
         table = self.__meta.table
         if need_id_field or self.__meta.new:
@@ -330,6 +340,7 @@ class ObjBase:
         self._save_pk()
 
     def __enter__(self):
+        """Lock for write, and trigger thread-isolation."""
         if self.__meta and self.__meta.table:
             self.__meta.lock.acquire()
             self.__meta.locked = True
@@ -339,13 +350,20 @@ class ObjBase:
         return self
 
     def __exit__(self, typ, val, ex):
-        # unbound objects aren't locked, and don't need the with: protocol
+        """Finished with write, call commit or not, based on exception."""
         if not self.__meta or not self.__meta.locked:
+            # unbound objects aren't locked, and don't need the with: protocol
             return
 
         try:
             if not typ:
-                self._commit()
+                # see self._atomic_update() for why this works
+                saved = self.__dict__
+                try:
+                    self._commit()
+                except Exception:
+                    self.__dict__ = saved
+                    raise
         finally:
             self.__meta.locked = False
             self.__meta.changes = None
@@ -354,6 +372,8 @@ class ObjBase:
 
 
 class CustomType:
+    """Derive from this type so that track-changes works with your custom object."""
+
     _parent = None
     _field = None
 
