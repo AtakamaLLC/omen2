@@ -24,7 +24,7 @@ class Relation(Selectable[T]):
 
         self._from = _from
         self._where = where
-        self.__table: Optional[Table] = None
+        self.__table: Optional["Table"] = None
         self.__saved: List["ObjBase"] = []
         if _init:
             for ent in _init:

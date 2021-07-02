@@ -358,7 +358,7 @@ class ObjBase:
         try:
             if not typ:
                 # see self._atomic_update() for why this works
-                saved = self.__dict__
+                saved = self.__dict__  # pylint: disable=access-member-before-definition
                 try:
                     self._commit()
                 except Exception:

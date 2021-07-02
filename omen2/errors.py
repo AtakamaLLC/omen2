@@ -28,7 +28,5 @@ class OmenUseWithError(OmenError):
 class OmenRollbackError(OmenError):
     """If this is thrown, changes are rolled back without re-raising."""
 
-    pass
-
 
 IntegrityError = notanorm.errors.IntegrityError
