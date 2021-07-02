@@ -8,7 +8,7 @@ from typing import Type, TYPE_CHECKING, Optional, Tuple, Iterable, Dict, Any
 from dataclasses import dataclass
 from contextlib import contextmanager
 
-from .errors import OmenUseWithError, OmenNoPkError
+from .errors import OmenUseWithError, OmenNoPkError, OmenRollbackError
 from .relation import Relation
 
 if TYPE_CHECKING:
@@ -364,6 +364,8 @@ class ObjBase:
                 except Exception:
                     self.__dict__ = saved
                     raise
+        except OmenRollbackError:
+            pass
         finally:
             self.__meta.locked = False
             self.__meta.changes = None
