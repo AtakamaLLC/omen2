@@ -119,7 +119,7 @@ class Omen(abc.ABC):
         for idx in model.indexes:
             if idx.primary:
                 pk = idx.fields
-        if len(pk) == 1:
+        if len(pk) == 1 and tab.allow_auto is None:
             for fd in model.columns:
                 if fd.name == pk[0]:
                     tab.allow_auto = fd.autoinc

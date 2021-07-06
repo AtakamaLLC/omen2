@@ -65,6 +65,9 @@ class ObjBase:
 
     def __init__(self, **kws):
         """Override this to control initialization, generally calling it *after* you do your own init."""
+        # even though this is set at the top of __init__, the __meta variable
+        # may not be set in a subclass before super().__init__ is called
+        # that means all attribute refs that use __meta, have to check 'if __meta' first
         self.__meta = ObjMeta()
         self._check_kws(kws)
         self.__meta.new = True
