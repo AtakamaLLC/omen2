@@ -109,3 +109,7 @@ with car:
 
 assert len(car.doors) == 4
 ```
+
+To run codegen manually, rather than "inline", you can run: `omen2-codegen my.package.MyClassName`.
+
+Commiting this file, and running this as a git-hook on any change is a useful pattern.
