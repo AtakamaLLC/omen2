@@ -169,7 +169,8 @@ class Omen(abc.ABC):
 
     @staticmethod
     def __multi_query(db, sql):
-        unlikely = "@!~@"
+        unlikely = "@!'\"~z@"
+        assert unlikely not in sql
         sql = sql.replace("\\;", unlikely)
         queries = sql.split(";")
         for q in queries:

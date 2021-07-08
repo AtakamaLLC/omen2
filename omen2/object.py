@@ -8,7 +8,7 @@ from typing import Type, TYPE_CHECKING, Optional, Tuple, Iterable, Dict, Any
 from dataclasses import dataclass
 from contextlib import contextmanager
 
-from .errors import OmenUseWithError, OmenNoPkError, OmenRollbackError
+from .errors import OmenUseWithError, OmenNoPkError, OmenRollbackError, OmenLockingError
 from .relation import Relation
 
 if TYPE_CHECKING:
@@ -30,6 +30,8 @@ class ObjMeta:
     suppress_get_changes = False
     changes: Dict[str, Any] = None
 
+
+VERY_LARGE_LOCK_TIMEOUT = 120
 
 # noinspection PyCallingNonCallable,PyProtectedMember
 class ObjBase:
@@ -345,9 +347,10 @@ class ObjBase:
     def __enter__(self):
         """Lock for write, and trigger thread-isolation."""
         if self.__meta and self.__meta.table:
-            self.__meta.lock.acquire()
+            if not self.__meta.lock.acquire(timeout=VERY_LARGE_LOCK_TIMEOUT):
+                log.critical("deadlock prevented", stack_info=True)
+                raise OmenLockingError
             self.__meta.locked = True
-            self.__meta.suppress_set_changes = False
             self.__meta.changes = {}
             self.__meta.lock_id = threading.get_ident()
         return self
@@ -367,8 +370,8 @@ class ObjBase:
                 except Exception:
                     self.__dict__ = saved
                     raise
-        except OmenRollbackError:
-            pass
+            if typ is OmenRollbackError:
+                return True
         finally:
             self.__meta.locked = False
             self.__meta.changes = None

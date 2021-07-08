@@ -19,6 +19,8 @@ from omen2.errors import (
     OmenKeyError,
     OmenMoreThanOneError,
     OmenUseWithError,
+    OmenRollbackError,
+    OmenLockingError,
 )
 from tests.schema import MyOmen
 
@@ -189,6 +191,40 @@ def test_rollback():
             raise ValueError
 
     assert car.gas_level == 2
+
+    with car:
+        car.gas_level = 3
+        raise OmenRollbackError
+
+    assert car.gas_level == 2
+
+
+@patch("omen2.object.VERY_LARGE_LOCK_TIMEOUT", 0.1)
+def test_deadlock():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car = mgr.cars.add(Car(gas_level=2))
+
+    def insert(i):
+        try:
+            with car:
+                car.gas_level = i
+                if i == 0:
+                    time.sleep(1)
+                return True
+        except OmenLockingError:
+            return False
+
+    num = 3
+    pool = ThreadPool(num)
+
+    ret = pool.map(insert, range(num))
+
+    assert sorted(ret) == [False, False, True]
+
+    pool.terminate()
+    pool.join()
 
 
 def test_update_only():
