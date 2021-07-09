@@ -15,7 +15,7 @@ class Harbinger(Omen):
             """
 
 
-Harbinger.codegen(force=True)
+Harbinger.codegen()
 from . import test_m2mhelper_gen as module
 
 # noinspection PyShadowingBuiltins

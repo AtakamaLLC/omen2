@@ -22,7 +22,7 @@ class Table(Selectable[T]):
 
     table_name: str
     field_names: Set[str]
-    allow_auto: bool = False
+    allow_auto: bool = None
 
     def __init_subclass__(cls, **_kws):
         if hasattr(cls, "row_type"):
