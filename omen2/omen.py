@@ -6,7 +6,7 @@ import os
 import sys
 import logging as log
 
-from notanorm import DbBase, SqliteDb, DbType, DbModel
+from notanorm import DbBase, SqliteDb, DbModel
 from typing import Any, Optional, Dict, Type, Iterable, TypeVar
 
 from .table import Table
@@ -14,28 +14,6 @@ from .object import ObjBase
 from .codegen import CodeGen
 
 T = TypeVar("T", bound=Table)
-
-
-def any_type(arg):
-    return arg
-
-
-def default_type(typ: DbType) -> Any:  # pylint: disable=too-many-return-statements
-    if typ == DbType.ANY:
-        return any_type
-    if typ == DbType.INTEGER:
-        return int
-    if typ == DbType.FLOAT:
-        return float
-    if typ == DbType.TEXT:
-        return str
-    if typ == DbType.BLOB:
-        return bytes
-    if typ == DbType.BOOLEAN:
-        return bool
-    if typ == DbType.DOUBLE:
-        return float
-    raise ValueError("unknown type: %s" % typ)
 
 
 # noinspection PyMethodMayBeStatic,PyProtectedMember
@@ -46,7 +24,6 @@ class Omen(abc.ABC):
 
     # abstract classes often do this, so # pylint: disable=no-self-use
 
-    generate_code = True
     version: Optional[int] = None
     model: DbModel = None
     table_types: Dict[str, Type["Table"]] = None
@@ -60,13 +37,11 @@ class Omen(abc.ABC):
             cls.__multi_query(db, cls.schema(cls.version))
             cls.model: DbModel = db.model()
 
-    def __init__(self, db: DbBase, migrate=True, **table_types):
+    def __init__(self, db: DbBase, **table_types):
         """Create a new manager with a db connection."""
         self.tables = {}
         self.db = db
 
-        if migrate:
-            self._migrate_if_needed()
         self._create_if_needed()
 
         self.table_types.update(table_types)
@@ -86,13 +61,14 @@ class Omen(abc.ABC):
     def __setitem__(self, table_type: Type[T], table: T):
         assert table_type.table_name == table.table_name
         self.table_types[table.table_name] = table_type
-        self.validate_table(table.table_name, table_type)
+        self._validate_table(table.table_name, table_type)
         self.tables[table_type] = table
 
     def set_table(self, table: Table):
         self[type(table)] = table
 
     def load_dict(self, data_set: Dict[str, Iterable[Dict[str, Any]]]):
+        """Load every table from a dictionary."""
         # load sample data into self
         for name, values in data_set.items():
             tab: Table = self.get_table_by_name(name)
@@ -100,6 +76,10 @@ class Omen(abc.ABC):
                 tab.add(tab.row_type._from_db(entry))
 
     def dump_dict(self) -> Dict[str, Iterable[Dict[str, Any]]]:
+        """Dump every table as a dictionary.
+
+        This just loops through all objects and calls _to_db on them.
+        """
         ret = {}
         for ttype, tab in self.tables.items():
             lst = []
@@ -108,12 +88,22 @@ class Omen(abc.ABC):
             ret[ttype.table_name] = lst
         return ret
 
-    def validate_table(self, name, tab):
+    def _validate_table(self, name, tab):
+        """Check if the class defined by tab is a valid table.
+
+        This will also attempt to update these class variables, if they are not set:
+            - row_type will be inferred from type vars, if any
+            - field_names will be inferred from the table_name
+            - allow_auto will be inferred from the primary key
+        """
         assert issubclass(tab, Table)
 
         if not getattr(tab, "table_name", None):
             tab.table_name = name
         assert tab.table_name == name
+
+        if not hasattr(tab, "row_type"):
+            self._bootstrap_row_type(tab)
 
         assert issubclass(tab.row_type, ObjBase)
         assert isinstance(getattr(tab.row_type, "_pk"), tuple)
@@ -129,13 +119,30 @@ class Omen(abc.ABC):
         for idx in model.indexes:
             if idx.primary:
                 pk = idx.fields
-        if len(pk) == 1:
+        if len(pk) == 1 and tab.allow_auto is None:
             for fd in model.columns:
                 if fd.name == pk[0]:
                     tab.allow_auto = fd.autoinc
 
+    def _bootstrap_row_type(self, tab):
+        """Given a class, figure guess the row_type based on the type hint.
+
+        For example:
+
+        class Cars(Table[Car]):
+            pass
+
+        row_type will be set to Car
+        """
+        bases = getattr(tab, "__orig_bases__", None)
+        if bases:
+            args = getattr(bases[0], "__args__")
+            if args and issubclass(args[0], ObjBase):
+                tab.row_type = args[0]
+                tab.row_type._table_type = tab
+
     @classmethod
-    def codegen(cls, force=False):
+    def codegen(cls, only_if_missing=False):
         """Generate code derived from my model, and put it next to my __file__."""
         if cls.__module__ == "__main__":
             module, _ = os.path.splitext(
@@ -147,21 +154,23 @@ class Omen(abc.ABC):
         module += "_gen"
 
         try:
-            if force:
+            if not only_if_missing:
                 raise ImportError
             generated = importlib.import_module(module)
         except (ImportError, SyntaxError):
-            CodeGen.generate_from_class(cls)
-            generated = importlib.import_module(module)
+            generated = CodeGen.generate_from_class(cls)
 
         for name in generated.__all__:
             table_type = getattr(generated, name)
             if name not in cls.table_types:
                 cls.table_types[name] = table_type
 
+        return generated
+
     @staticmethod
     def __multi_query(db, sql):
-        unlikely = "@!~@"
+        unlikely = "@!'\"~z@"
+        assert unlikely not in sql
         sql = sql.replace("\\;", unlikely)
         queries = sql.split(";")
         for q in queries:
@@ -176,39 +185,8 @@ class Omen(abc.ABC):
         if not mod1 == mod2:
             self.__multi_query(self.db, self.schema(self.version))
 
-    def _migrate_if_needed(self):
-        if self.version is None:
-            return
-
-        # omen, built-in version management
-        self.db.query("create table if not exists _omen(version text);")
-        omen_info = self.db.select_one("_omen")
-
-        if omen_info:
-            restore_info = self.backup()
-            try:
-                next_version = omen_info.version
-                while omen_info.version != self.version:
-                    next_version += 1
-                    self.migrate(self.db, next_version)
-                    self.db.upsert_all("_omen", version=next_version)
-            finally:
-                self.restore(restore_info)
-
     @classmethod
     @abc.abstractmethod
     def schema(cls, version):
         """Override this to return a schema for a given version."""
         ...
-
-    def migrate(self, db, version):
-        """Override this to support migration."""
-        raise NotImplementedError
-
-    def restore(self, backup_info: Any):
-        """Override this to support backup and recovery during migration."""
-        raise NotImplementedError
-
-    def backup(self) -> Any:
-        """Override this to support backup and recovery during migration."""
-        return object()

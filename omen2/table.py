@@ -22,7 +22,7 @@ class Table(Selectable[T]):
 
     table_name: str
     field_names: Set[str]
-    allow_auto: bool = False
+    allow_auto: bool = None
 
     def __init_subclass__(cls, **_kws):
         if hasattr(cls, "row_type"):
@@ -50,26 +50,31 @@ class Table(Selectable[T]):
         obj._commit()
         return obj
 
-    def remove(self, obj: T):
+    def remove(self, obj: "ObjBase" = None, **kws):
         """Remove an object from the db."""
-        if not obj._meta or not obj._meta.table:
+        if obj is None:
+            if not kws:
+                log.debug("not removing obj, because it is None")
+                return
+            obj = self.select_one(**kws)
+        if not obj or not obj._is_bound:
             log.debug("not removing object that isn't in the db")
             return
-        assert obj._meta.table is self
+        assert obj._table is self
         obj._remove()
 
-    def _remove(self, obj: T):
+    def _remove(self, obj: "ObjBase"):
         """Remove an object from the db, without cascading."""
         self._cache.pop(obj._to_pk_tuple(), None)
         vals = obj._to_pk()
         self.db.delete(self.table_name, **vals)
 
-    def update(self, obj: T):
+    def update(self, obj: T, keys: Iterable[str]):
         """Add object to db + cache"""
         self._add_cache(obj)
-        vals = obj._to_db()
-        if obj._meta.pk:
-            self.db.upsert(self.table_name, obj._meta.pk, **vals)
+        vals = obj._to_db(keys)
+        if obj._saved_pk:
+            self.db.upsert(self.table_name, obj._saved_pk, **vals)
         else:
             self.db.upsert(self.table_name, **vals)
 
@@ -102,8 +107,7 @@ class Table(Selectable[T]):
                 already = cached._to_db()
                 if update != already:
                     log.debug("updating %s from db", repr(obj))
-                    with obj:
-                        obj._update(update)
+                    cached._update_from_object(obj)
                 obj = cached
             else:
                 obj._bind(table=self)
