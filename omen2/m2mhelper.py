@@ -42,9 +42,9 @@ class M2MMixObj(Generic[T1, T2]):
         return self.__class__.__name__ + repr((self._obj1, self._obj2))
 
     def __getattr__(self, key):
-        if hasattr(self._obj2, key):
-            return getattr(self._obj2, key)
-        return getattr(self._obj1, key)
+        if hasattr(self._obj1, key):
+            return getattr(self._obj1, key)
+        return getattr(self._obj2, key)
 
     def __setattr__(self, key, val):
         if not self.__ready:
@@ -148,7 +148,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         Memoized getter/shortcut.
         """
         if not self.__table2:
-            mgr: "Omen" = self._from._meta.table.manager
+            mgr: "Omen" = self._from._table.manager
             self.__table2: "Table" = mgr.get_table_by_name(self.table_type_2.table_name)
             self.table_type_2 = type(self.__table2)
         return self.__table2
@@ -220,6 +220,10 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         if not isinstance(obj_or_id, (ObjBase, M2MMixObj)) or not obj_or_id:
             # we have to call "get" to get the obj
             obj = self.get(obj_or_id, None, **kws)
+            if obj is None:
+                return
+        elif isinstance(obj_or_id, ObjBase):
+            obj = self.get(**obj_or_id._to_pk())
             if obj is None:
                 return
         else:

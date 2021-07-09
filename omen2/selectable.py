@@ -1,4 +1,4 @@
-from typing import TypeVar, Generic, Optional, Iterable, TYPE_CHECKING
+from typing import TypeVar, Generic, Optional, Iterable, TYPE_CHECKING, Type
 
 from omen2.errors import OmenMoreThanOneError, OmenKeyError
 
@@ -13,7 +13,7 @@ T = TypeVar("T", bound="ObjBase")
 class Selectable(Generic[T]):
     # pylint: disable=dangerous-default-value, protected-access
 
-    row_type: "T"
+    row_type: Type["T"]
 
     # noinspection PyProtectedMember
     def get(self, _id=None, _default=None, **kws) -> Optional[T]:
