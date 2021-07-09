@@ -359,7 +359,7 @@ class ObjBase:
         """Finished with write, call commit or not, based on exception."""
         if not self.__meta or not self.__meta.locked:
             # unbound objects aren't locked, and don't need the with: protocol
-            return
+            return False
 
         try:
             if not typ:
@@ -377,6 +377,8 @@ class ObjBase:
             self.__meta.changes = None
             self.__meta.lock_id = 0
             self.__meta.lock.release()
+
+        return False
 
 
 class CustomType:
