@@ -1,0 +1,393 @@
+# pylint: disable=protected-access
+
+import logging
+import threading
+from threading import RLock
+from typing import Type, TYPE_CHECKING, Optional, Tuple, Iterable, Dict, Any
+
+from dataclasses import dataclass
+from contextlib import contextmanager
+
+from .errors import OmenUseWithError, OmenNoPkError, OmenRollbackError, OmenLockingError
+from .relation import Relation
+
+if TYPE_CHECKING:
+    from omen2.omen import Omen
+    from omen2 import Table
+
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class ObjMeta:
+    lock = RLock()
+    locked = False
+    new = True
+    table: Optional["Table"] = None
+    pk = None
+    lock_id = 0
+    suppress_set_changes = False
+    suppress_get_changes = False
+    changes: Dict[str, Any] = None
+
+
+VERY_LARGE_LOCK_TIMEOUT = 120
+
+# noinspection PyCallingNonCallable,PyProtectedMember
+class ObjBase:
+    # objects have 2 non-private attributes that can be overridden
+    _cascade = True
+    _pk: Tuple[str, ...] = ()  # list of field names in the db used as the primary key
+    _table_type: Type["Table"]  # class derived from Table
+
+    # objects should only have 1 variable in __dict__
+    __meta: ObjMeta = None
+
+    def __eq__(self, obj):
+        return obj._to_pk() == self._to_pk()
+
+    def __repr__(self):
+        return self.__class__.__name__ + "(" + str(self._to_pk()) + ")"
+
+    def __str__(self):
+        return str(self._to_db())
+
+    def __hash__(self):
+        return hash(self._to_pk_tuple())
+
+    def _to_pk_tuple(self):
+        return tuple(sorted(self._to_pk().items()))
+
+    def __lt__(self, other: "ObjBase"):
+        return self._to_pk_tuple() < other._to_pk_tuple()
+
+    def __init_subclass__(cls, **_kws):
+        # you must set these in the base class
+        assert cls._pk, "All classes must have a _pk"
+
+    def __init__(self, **kws):
+        """Override this to control initialization, generally calling it *after* you do your own init."""
+        # even though this is set at the top of __init__, the __meta variable
+        # may not be set in a subclass before super().__init__ is called
+        # that means all attribute refs that use __meta, have to check 'if __meta' first
+        self.__meta = ObjMeta()
+        self._check_kws(kws)
+        self.__meta.new = True
+
+    def _save_pk(self):
+        self.__meta.pk = self._to_pk()
+
+    @property
+    def _changes(self):
+        return self.__meta.changes
+
+    @property
+    def _saved_pk(self):
+        return self.__meta.pk
+
+    @classmethod
+    def _from_db(cls, dct):
+        """Override this if you want to change how deserialization works."""
+        return cls(**dct)
+
+    def _link_custom_types(self):
+        """Any values derived from CustomType will track-changes through to the parent object."""
+        for k, v in self.__dict__.items():
+            if isinstance(v, CustomType):
+                # pylint: disable=attribute-defined-outside-init
+                v._parent = self
+                v._field = k
+
+    @classmethod
+    def _from_db_not_new(cls, dct):
+        """Override this if you want to change how deserialization works."""
+        ret = cls._from_db(dct)
+        ret._link_custom_types()
+        ret.__meta.new = False
+        ret._save_pk()
+        return ret
+
+    def _check_kws(self, dct):
+        for k in dct:
+            if k not in self.__dict__:
+                raise AttributeError(
+                    "%s not a known attribute of %s" % (k, self.__class__.__name__)
+                )
+
+    def _matches(self, dct):
+        for k, v in dct.items():
+            if getattr(self, k) != v:
+                return False
+        return True
+
+    def _update_from_object(self, obj):
+        update = {
+            k: v
+            for k, v in obj.__dict__.items()
+            if not isinstance(v, Relation) and not k.startswith("_ObjBase__")
+        }
+        self._atomic_apply(self, update)
+
+    def _bind(self, table: "Table" = None, manager: "Omen" = None):
+        if table is None:
+            table = manager[self._table_type]
+        self._table = table
+
+    @property
+    def _is_bound(self) -> bool:
+        # important to cast this for better errors
+        return bool(self.__meta and self.__meta.table)
+
+    @property
+    def _is_new(self) -> bool:
+        return self.__meta and self.__meta.new
+
+    @property
+    def _table(self):
+        return self.__meta.table
+
+    @_table.setter
+    def _table(self, val):
+        self.__meta.table = val
+
+    def _manager(self):
+        return self.__meta.table.manager
+
+    @contextmanager
+    def _suppress_get_changes(self):
+        self.__meta.suppress_get_changes = True
+        yield self
+        self.__meta.suppress_get_changes = False
+
+    @contextmanager
+    def _suppress_set_changes(self):
+        self.__meta.suppress_set_changes = True
+        yield self
+        self.__meta.suppress_set_changes = False
+
+    def _to_db(self, keys: Iterable[str] = None):
+        """Get dict of serialized data from self."""
+        ret = {}
+        keys = keys or self._table_type.field_names
+        with self._suppress_get_changes():
+            for k in keys:
+                v = getattr(self, k)
+                if hasattr(v, "_to_db"):
+                    # pylint: disable=no-member
+                    v = v._to_db()
+
+                ret[k] = v
+            return ret
+
+    def _to_pk(self):
+        """Get dict of serialized data from self, but pk elements only.
+
+        You will have to override this if you're overriding _to_db, and
+        any of the transformed values are part of your primary key.
+
+        Guaranteed compatible override would be:
+
+        def _to_pk(self):
+            dct = self._to_db()
+            return {k: dct[v] for k in self._pk}
+
+        The only reason this isn't used by default is efficiency.
+        """
+        ret = {}
+        for k in self._pk:
+            v = getattr(self, k)
+            if v is None:
+                raise OmenNoPkError("invalid primary key")
+            ret[k] = v
+        return ret
+
+    def _need_id(self):
+        need_id_field = None
+        for field in self._pk:
+            if getattr(self, field, None) is None:
+                if not self._table_type.allow_auto:
+                    raise OmenNoPkError(
+                        "will not create %s without primary key"
+                        % self.__class__.__name__
+                    )
+                assert not need_id_field
+                need_id_field = field
+        return need_id_field
+
+    def __getattribute__(self, k):
+        if k[0] == "_":
+            return super().__getattribute__(k)
+
+        if (
+            self.__meta
+            and self.__meta.locked
+            and self.__meta.lock_id == threading.get_ident()
+            and not self.__meta.suppress_get_changes
+        ):
+            return self.__meta.changes.get(k, super().__getattribute__(k))
+
+        return super().__getattribute__(k)
+
+    def __setattr__(self, k, v):
+        if k[0] == "_":
+            super().__setattr__(k, v)
+            return
+
+        if self.__meta and not self.__meta.suppress_set_changes:
+            if self.__meta.table and not self.__meta.locked:
+                raise OmenUseWithError("use with: protocol for bound objects")
+            if self.__meta.table and self.__meta.lock_id != threading.get_ident():
+                raise OmenUseWithError("use with: protocol for bound objects")
+            if not hasattr(self, k):
+                raise AttributeError("Attribute %s not defined" % k)
+
+        if self._is_bound and not self.__meta.suppress_set_changes:
+            self.__meta.changes[k] = v
+        else:
+            super().__setattr__(k, v)
+
+    def _get_related(self):
+        related = {}
+        for val in self.__dict__.values():
+            if isinstance(val, Relation) and val.cascade:
+                related[val] = list(val.select())
+        return related
+
+    def _collect_cascade(self):
+        # cascading id changes to relations is expensive, and involves weird swaps
+        # but it seems like this should be rare behavior
+        # we save a list of all related objects here
+        # and then later, we go throught and update all of them
+        # because we don't know what the lambda-relationship is
+        if self.__meta.pk:
+            pk = self._to_pk()
+            if pk != self.__meta.pk:
+                for k, v in self.__meta.pk.items():
+                    setattr(self, k, v)
+                try:
+                    return self._get_related()
+                finally:
+                    for k, v in pk.items():
+                        setattr(self, k, v)
+        return {}
+
+    @staticmethod
+    def _atomic_apply(obj, changes: Dict[str, Any]):
+        """Atomically apply a dictionary of changes to a python object."""
+        tmpobj = obj.__new__(type(obj))  # new obj, no __init__
+        tmpobj.__dict__ = obj.__dict__.copy()  # copy all attrs to new obj
+        tmpobj._force_apply(changes)
+        obj.__dict__ = tmpobj.__dict__  # swap in new dict (atomic)
+
+    def _force_apply(self, changes):
+        # these attribute sets do not go into the changeset
+        # but setters still get triggered normally
+        with self._suppress_set_changes():
+            for k, v in changes.items():
+                setattr(self, k, v)
+
+    def _commit(self):
+        """Apply all pending changes to the object, and to the db."""
+        changes = []
+
+        # apply all changes to this object & triggers setters
+        if self.__meta.changes:
+            # apply changes to new obj, side effects of setters, etc
+            changes = self.__meta.changes
+            self._atomic_apply(self, changes)
+            self.__meta.changes = {}
+
+        # collect any primary key-cascading updates
+        cascade = self._collect_cascade() if self._cascade else {}
+
+        # save changes to the db
+        self._save(changes)
+
+        # commit any changes in unbound relations to the db
+        for val in self.__dict__.values():
+            if isinstance(val, Relation):
+                val.commit(self.__meta.table.manager)
+
+        # apply any cascading primary-key changes to the db
+        for rel, objs in cascade.items():
+            for obj in objs:
+                rel._link_obj(obj)
+
+        # custom types can lose their linkage during this process
+        self._link_custom_types()
+
+    def _remove(self):
+        """Remove myself from my table.
+
+        Normally cascades to related tables, if Class._cascade is true.
+        """
+        cascade = self._get_related() if self._cascade else {}
+
+        if self.__meta.table:
+            table = self.__meta.table
+            table._remove(self)
+
+        for rel, objs in cascade.items():
+            for obj in objs:
+                rel.remove(obj)
+
+    def _save(self, keys: Iterable[str]):
+        """Save myself to my table."""
+
+        need_id_field = self._need_id()
+        table = self.__meta.table
+        if need_id_field or self.__meta.new:
+            table.insert(self, need_id_field)
+        elif keys:
+            table.update(self, keys)
+
+        self.__meta.new = False
+        self._save_pk()
+
+    def __enter__(self):
+        """Lock for write, and trigger thread-isolation."""
+        if self.__meta and self.__meta.table:
+            if not self.__meta.lock.acquire(timeout=VERY_LARGE_LOCK_TIMEOUT):
+                log.critical("deadlock prevented", stack_info=True)
+                raise OmenLockingError
+            self.__meta.locked = True
+            self.__meta.changes = {}
+            self.__meta.lock_id = threading.get_ident()
+        return self
+
+    def __exit__(self, typ, val, ex):
+        """Finished with write, call commit or not, based on exception."""
+        if not self.__meta or not self.__meta.locked:
+            # unbound objects aren't locked, and don't need the with: protocol
+            return False
+
+        try:
+            if not typ:
+                # see self._atomic_update() for why this works
+                saved = self.__dict__  # pylint: disable=access-member-before-definition
+                try:
+                    self._commit()
+                except Exception:
+                    self.__dict__ = saved
+                    raise
+            if typ is OmenRollbackError:
+                return True
+        finally:
+            self.__meta.locked = False
+            self.__meta.changes = None
+            self.__meta.lock_id = 0
+            self.__meta.lock.release()
+
+        return False
+
+
+class CustomType:
+    """Derive from this type so that track-changes works with your custom object."""
+
+    _parent = None
+    _field = None
+
+    def __setattr__(self, key, value):
+        super().__setattr__(key, value)
+        if self._parent and self._field and key[0] != "_":
+            setattr(self._parent, self._field, self)
