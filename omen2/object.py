@@ -150,6 +150,7 @@ class ObjBase:
     def _table(self, val):
         self.__meta.table = val
 
+    @property
     def _manager(self):
         return self.__meta.table.manager
 

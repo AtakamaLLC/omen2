@@ -278,6 +278,8 @@ def test_need_with():
     car = mgr.cars.add(Car(gas_level=2))
     with pytest.raises(OmenUseWithError):
         car.doors = "green"
+        assert car._manager is mgr
+    assert mgr.cars.manager is mgr
 
 
 def test_shortcut_syntax():
