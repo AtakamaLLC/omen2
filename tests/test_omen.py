@@ -243,6 +243,19 @@ def test_update_only():
     assert db.select_one("cars", id=4).color == "black"
 
 
+def test_nested_with():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car = mgr.cars.add(Car(id=4, gas_level=2))
+    with car:
+        car.gas_level = 3
+        with pytest.raises(OmenLockingError):
+            with car:
+                car.color = "blx"
+    assert db.select_one("cars", id=4).gas_level == 3
+
+
 def test_nopk():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db, cars=Cars)

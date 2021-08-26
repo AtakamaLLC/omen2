@@ -350,6 +350,9 @@ class ObjBase:
             if not self.__meta.lock.acquire(timeout=VERY_LARGE_LOCK_TIMEOUT):
                 log.critical("deadlock prevented", stack_info=True)
                 raise OmenLockingError
+            if self.__meta.locked:
+                # nested with blocks could work, but they are an anti-pattern
+                raise OmenLockingError("nested with blocks not supported")
             self.__meta.locked = True
             self.__meta.changes = {}
             self.__meta.lock_id = threading.get_ident()
