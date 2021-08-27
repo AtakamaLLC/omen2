@@ -7,7 +7,7 @@ import logging as log
 
 from notanorm import DbTable, DbCol
 
-from omen2.types import default_type
+from omen2.types import default_type, any_type
 
 
 class CodeGen:
@@ -84,6 +84,8 @@ class CodeGen:
         for col in dbtab.columns:
             pytype = default_type(col.typ)
             typename = pytype.__name__
+            if pytype is any_type:
+                typename = "Any"
             if not col.notnull:
                 typename = "Optional[%s]" % typename
             print("    %s: %s" % (col.name, typename), file=out)
@@ -178,7 +180,7 @@ class CodeGen:
         """Generate import statements."""
         print(
             "from omen2 import ObjBase, Table, Relation, any_type\n"
-            "from typing import TypeVar, Optional\n",
+            "from typing import TypeVar, Optional, Any\n",
             file=out,
         )
 

@@ -2,6 +2,7 @@ import sys
 
 from omen2 import Omen
 from omen2.codegen import CodeGen, main
+from typing import Any, Optional
 
 
 def test_codegen():
@@ -10,9 +11,9 @@ def test_codegen():
         def schema(cls, version):
             return """
                 create table zappy(
-                    id integer primary key, 
+                    id integer primary key,
                     nonnull text not null,
-                    defstr text not null default 'default txt', 
+                    defstr text not null default 'default txt',
                     floaty double default 1.0,
                     bad_default not null default (strftime('%s','now')) ,
                     class text
@@ -25,6 +26,10 @@ def test_codegen():
     assert zap.floaty == 1.0
     assert zap.class_ is None
     assert zap.defstr == "default txt"
+    assert zap.__annotations__["bad_default"] is Any
+    assert zap.__annotations__["floaty"] is Optional[float]
+    assert zap.__annotations__["id"] is Optional[int]
+    assert zap.__annotations__["nonnull"] is str
 
 
 def test_codegen_pathed():

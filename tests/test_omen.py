@@ -498,6 +498,11 @@ def test_any_type():
     assert not mgr[whatever].select_one(any="31")
     assert not mgr[whatever].select_one(any=b"str")
 
+    w = mgr[whatever].select_one(any=31)
+    with w:
+        w.any = "change"
+    assert mgr[whatever].select_one(any="change")
+
 
 class InlineBasic(ObjBase):
     _pk = ("id",)

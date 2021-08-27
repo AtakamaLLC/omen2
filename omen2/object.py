@@ -236,6 +236,8 @@ class ObjBase:
 
     @staticmethod
     def __accept_instance(v, typ):
+        if typ is Any:
+            return True
         if type(v) is int and issubclass(typ, float):
             return True
         return isinstance(v, typ)
