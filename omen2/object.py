@@ -37,7 +37,7 @@ VERY_LARGE_LOCK_TIMEOUT = 120
 class ObjBase:
     # objects have 2 non-private attributes that can be overridden
     _cascade = True
-    _type_check = True
+    _type_check = False  # whether annotated types are checked in python
     _pk: Tuple[str, ...] = ()  # list of field names in the db used as the primary key
     _table_type: Type["Table"]  # class derived from Table
 
@@ -240,7 +240,11 @@ class ObjBase:
             return True
         if type(v) is int and issubclass(typ, float):
             return True
-        return isinstance(v, typ)
+        try:
+            return isinstance(v, typ)
+        except TypeError:
+            # not checking types i don't know how to handle
+            return True
 
     @classmethod
     def __assert_instance(cls, k, v):
@@ -249,11 +253,15 @@ class ObjBase:
             for sub in typ.__args__:
                 if cls.__accept_instance(v, sub):
                     return
-            raise TypeError("%s is type %s" % (k, typ))
-        elif not cls.__accept_instance(v, typ):
-            raise TypeError("%s is type %s" % (k, typ))
+        elif cls.__accept_instance(v, typ):
+            return
+        raise TypeError("%s is type %s" % (k, typ))
 
     def _checkattr(self, k, v):
+        """Override this if you want to change how annotation checking is done.
+
+        This only does very basic assertions, and will not check complex types.
+        """
         if not hasattr(self, k):
             raise AttributeError("Attribute %s not defined" % k)
         if self._type_check:

@@ -827,6 +827,8 @@ def test_other_attrs():
 def test_type_checking():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db)
+    Car._type_check = True
+
     mgr.cars = Cars(mgr)
     car = mgr.cars.add(Car(gas_level=0, color="green"))
 
