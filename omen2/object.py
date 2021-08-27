@@ -246,7 +246,7 @@ class ObjBase:
             self._checkattr(k, v)
 
         if self._is_bound and not self.__meta.suppress_set_changes:
-            self.__checkattr(k, v)
+            self._checkattr(k, v)
             self.__meta.changes[k] = v
         else:
             super().__setattr__(k, v)
@@ -357,6 +357,7 @@ class ObjBase:
                 raise OmenLockingError
             if self.__meta.locked:
                 # nested with blocks could work, but they are an anti-pattern
+                self.__meta.lock.release()
                 raise OmenLockingError("nested with blocks not supported")
             self.__meta.locked = True
             self.__meta.changes = {}
