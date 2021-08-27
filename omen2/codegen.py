@@ -62,6 +62,8 @@ class CodeGen:
         Example:
 
             class cars_row(ObjBase):
+                id: int
+                color: str
                 _pk = ("id", )
                 def __init__(self, id, color: str = "green"):
                     self.id = id
@@ -78,6 +80,13 @@ class CodeGen:
         for index in dbtab.indexes:
             if index.primary and index.fields:
                 keys = index.fields
+
+        for col in dbtab.columns:
+            pytype = default_type(col.typ)
+            typename = pytype.__name__
+            if not col.notnull:
+                typename = "Optional[%s]" % typename
+            print("    %s: %s" % (col.name, typename), file=out)
 
         # _pk is a class-variable
         print("    _pk = ('" + "', '".join(keys) + "', )", file=out)
@@ -169,7 +178,7 @@ class CodeGen:
         """Generate import statements."""
         print(
             "from omen2 import ObjBase, Table, Relation, any_type\n"
-            "from typing import TypeVar\n",
+            "from typing import TypeVar, Optional\n",
             file=out,
         )
 

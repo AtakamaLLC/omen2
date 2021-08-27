@@ -3,7 +3,7 @@
 import logging
 import threading
 from threading import RLock
-from typing import Type, TYPE_CHECKING, Optional, Tuple, Iterable, Dict, Any
+from typing import Type, TYPE_CHECKING, Optional, Tuple, Iterable, Dict, Any, Union
 
 from dataclasses import dataclass
 from contextlib import contextmanager
@@ -37,6 +37,7 @@ VERY_LARGE_LOCK_TIMEOUT = 120
 class ObjBase:
     # objects have 2 non-private attributes that can be overridden
     _cascade = True
+    _type_check = True
     _pk: Tuple[str, ...] = ()  # list of field names in the db used as the primary key
     _table_type: Type["Table"]  # class derived from Table
 
@@ -229,24 +230,49 @@ class ObjBase:
 
         return super().__getattribute__(k)
 
+    @classmethod
+    def __get_type(cls, k) -> Type:
+        return cls.__annotations__.get(k, None)
+
+    @staticmethod
+    def __accept_instance(v, typ):
+        if type(v) is int and issubclass(typ, float):
+            return True
+        return isinstance(v, typ)
+
+    @classmethod
+    def __assert_instance(cls, k, v):
+        typ = cls.__get_type(k)
+        if getattr(typ, "__origin__", None) is Union:
+            for sub in typ.__args__:
+                if cls.__accept_instance(v, sub):
+                    return
+            raise TypeError("%s is type %s" % (k, typ))
+        elif not cls.__accept_instance(v, typ):
+            raise TypeError("%s is type %s" % (k, typ))
+
     def _checkattr(self, k, v):
         if not hasattr(self, k):
             raise AttributeError("Attribute %s not defined" % k)
+        if self._type_check:
+            if k in self.__annotations__:
+                self.__assert_instance(k, v)
 
     def __setattr__(self, k, v):
         if k[0] == "_":
             super().__setattr__(k, v)
             return
 
+        if self.__meta:
+            self._checkattr(k, v)
+
         if self.__meta and not self.__meta.suppress_set_changes:
             if self.__meta.table and not self.__meta.locked:
                 raise OmenUseWithError("use with: protocol for bound objects")
             if self.__meta.table and self.__meta.lock_id != threading.get_ident():
                 raise OmenUseWithError("use with: protocol for bound objects")
-            self._checkattr(k, v)
 
         if self._is_bound and not self.__meta.suppress_set_changes:
-            self._checkattr(k, v)
             self.__meta.changes[k] = v
         else:
             super().__setattr__(k, v)

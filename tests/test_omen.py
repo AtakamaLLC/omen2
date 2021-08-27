@@ -792,18 +792,63 @@ def test_reload_from_disk():
     assert car.color == "blue"
 
 
-def test_update_to_null():
+def test_other_attrs():
+    # noinspection PyAbstractClass
+    class Harbinger(Omen):
+        @classmethod
+        def schema(cls, version):
+            return "create table basic (id integer primary key, data text)"
+
+    db = SqliteDb(":memory:")
+
+    class Basic(InlineBasic):
+        def __init__(self, *, id, data, **kws):
+            self.custom_thing = 44
+            super().__init__(id=id, data=data, **kws)
+
+    # tests bootstrapping
+    class Basics(Table[Basic]):
+        pass
+
+    mgr = Harbinger(db, basic=Basics)
+    mgr.basic = Basics(mgr)
+    mgr.basic.new(id=1, data="someval")
+    bas = mgr.basic.select_one(id=1)
+    assert bas.custom_thing == 44
+    with pytest.raises(OmenUseWithError):
+        bas.custom_thing = 3
+
+
+def test_type_checking():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db)
     mgr.cars = Cars(mgr)
     car = mgr.cars.add(Car(gas_level=0, color="green"))
-    with car:
-        car.gas_level = None
-    assert db.select_one("cars", id=1).gas_level is None
+
+    with pytest.raises(TypeError):
+        with car:
+            car.color = None
+
+    with pytest.raises(TypeError):
+        with car:
+            car.color = 4
+
+    with pytest.raises(TypeError):
+        with car:
+            car.gas_level = "hello"
+
+    with pytest.raises(TypeError):
+        with car:
+            car.color = b"ggh"
+
+    car._type_check = False
     with pytest.raises(notanorm.errors.IntegrityError):
         with car:
             car.color = None
-    assert car.color == "green"
+
+    # sqlite allows this, so we do too, since type checking is off
+    with car:
+        car.color = b"ggh"
 
 
 def test_disable_allow_auto():
