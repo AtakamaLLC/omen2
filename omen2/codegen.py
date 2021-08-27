@@ -223,7 +223,7 @@ class CodeGen:
 
         out_path = cg.output_path()
         tmp_path = out_path + ".tmp"
-        with open(tmp_path, "w") as outf:
+        with open(tmp_path, "w", encoding="utf8") as outf:
             cg.gen_monolith(outf)
 
         os.replace(tmp_path, out_path)

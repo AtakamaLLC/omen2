@@ -229,6 +229,10 @@ class ObjBase:
 
         return super().__getattribute__(k)
 
+    def _checkattr(self, k, v):
+        if not hasattr(self, k):
+            raise AttributeError("Attribute %s not defined" % k)
+
     def __setattr__(self, k, v):
         if k[0] == "_":
             super().__setattr__(k, v)
@@ -239,10 +243,10 @@ class ObjBase:
                 raise OmenUseWithError("use with: protocol for bound objects")
             if self.__meta.table and self.__meta.lock_id != threading.get_ident():
                 raise OmenUseWithError("use with: protocol for bound objects")
-            if not hasattr(self, k):
-                raise AttributeError("Attribute %s not defined" % k)
+            self._checkattr(k, v)
 
         if self._is_bound and not self.__meta.suppress_set_changes:
+            self.__checkattr(k, v)
             self.__meta.changes[k] = v
         else:
             super().__setattr__(k, v)
