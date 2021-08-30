@@ -823,6 +823,9 @@ def test_other_attrs():
     with pytest.raises(OmenUseWithError):
         bas.custom_thing = 3
 
+    assert mgr.basic.select_one(custom_thing=44)
+    assert not mgr.basic.select_one(custom_thing=43)
+
 
 def test_type_checking():
     db = SqliteDb(":memory:")

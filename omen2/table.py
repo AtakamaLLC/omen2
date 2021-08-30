@@ -99,7 +99,9 @@ class Table(Selectable[T]):
         return self.db.select(self.table_name, None, where)
 
     def __select(self, where) -> Iterable[T]:
-        for row in self.db_select(where):
+        db_where = {k: v for k, v in where.items() if k in self.field_names}
+        attr_where = {k: v for k, v in where.items() if k not in self.field_names}
+        for row in self.db_select(db_where):
             obj = self.row_type._from_db_not_new(row._asdict())
             cached: "ObjBase" = self._cache.get(obj._to_pk_tuple())
             if cached:
@@ -112,7 +114,8 @@ class Table(Selectable[T]):
             else:
                 obj._bind(table=self)
                 self._add_cache(obj)
-            yield obj
+            if all(getattr(obj, k) == v for k, v in attr_where.items()):
+                yield obj
 
     def select(self, _where={}, **kws) -> Iterable[T]:
         """Read objects of specified class."""
