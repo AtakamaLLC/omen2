@@ -19,16 +19,21 @@ class Selectable(Generic[T]):
     def get(self, _id=None, _default=None, **kws) -> Optional[T]:
         """Shortcut method, you can access object by a single pk/positional id."""
         if _id is not None:
-            assert len(self.row_type._pk) == 1
-            kws[self.row_type._pk[0]] = _id
+            assert not kws and len(self.row_type._pk) == 1
+            return self._get_by_id(_id) or _default
         return self.select_one(**kws) or _default
+
+    def _get_by_id(self, _id):
+        assert len(self.row_type._pk) == 1
+        kws = {self.row_type._pk[0]: _id}
+        return self.select_one(**kws)
 
     def __contains__(self, item) -> bool:
         # noinspection PyTypeChecker
         if isinstance(item, self.row_type):
             # noinspection PyProtectedMember
             return self.select_one(_where=item._to_pk()) is not None
-        return self.get(item) is not None
+        return self._get_by_id(item) is not None
 
     def __call__(self, _id=None, **kws) -> Optional[T]:
         if _id is not None:
