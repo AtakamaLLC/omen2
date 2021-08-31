@@ -249,3 +249,6 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
             self.__resolve_where(kws, side=0, invert=False)
             self.__resolve_where(kws, side=1, obj=obj, invert=False)
         return self.select_one(**kws) or _default
+
+    def __contains__(self, item):
+        return self.get(item) is not None
