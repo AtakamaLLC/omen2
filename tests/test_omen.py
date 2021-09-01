@@ -5,6 +5,7 @@ import time
 from contextlib import suppress
 from multiprocessing.pool import ThreadPool
 from unittest.mock import patch
+from types import ModuleType
 
 import notanorm.errors
 import pytest
@@ -553,6 +554,28 @@ def test_inline_omen_no_codegen():
 
     dumped = mgr.dump_dict()
     assert dumped == data_set
+
+
+def test_inline_omen_from_module():
+    # noinspection PyAbstractClass
+    class Harbinger(Omen):
+        @classmethod
+        def schema(cls, version):
+            return "create table basic (id integer primary key, data integer)"
+
+    db = SqliteDb(":memory:")
+
+    class Basic(InlineBasic):
+        pass
+
+    class Basics(Table):
+        table_name = "basic"
+        row_type = Basic
+
+    module = ModuleType("<inline>")
+    module.Basics = Basics
+    mgr = Harbinger(db, module)
+    mgr[Basics].add(Basic(id=1))
 
 
 def test_custom_data_type():

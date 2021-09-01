@@ -37,7 +37,7 @@ class Omen(abc.ABC):
             cls.__multi_query(db, cls.schema(cls.version))
             cls.model: DbModel = db.model()
 
-    def __init__(self, db: DbBase, **table_types):
+    def __init__(self, db: DbBase, module=None, **table_types):
         """Create a new manager with a db connection."""
         self.tables = {}
         self.db = db
@@ -45,6 +45,9 @@ class Omen(abc.ABC):
         self._create_if_needed()
 
         self.table_types.update(table_types)
+
+        if module:
+            self._init_module(module)
 
         for name, table_type in self.table_types.items():
             # allow user to specify the table name this way instead
@@ -160,12 +163,16 @@ class Omen(abc.ABC):
         except (ImportError, SyntaxError):
             generated = CodeGen.generate_from_class(cls)
 
-        for name in generated.__all__:
-            table_type = getattr(generated, name)
-            if name not in cls.table_types:
-                cls.table_types[name] = table_type
+        cls._init_module(generated)
 
         return generated
+
+    @classmethod
+    def _init_module(cls, module):
+        for name in getattr(module, "__all__", dir(module)):
+            table_type = getattr(module, name)
+            if isinstance(table_type, type) and issubclass(table_type, Table):
+                cls.table_types[table_type.table_name] = table_type
 
     @staticmethod
     def __multi_query(db, sql):
