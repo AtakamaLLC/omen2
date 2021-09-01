@@ -27,7 +27,6 @@ class Omen(abc.ABC):
     version: Optional[int] = None
     model: DbModel = None
     table_types: Dict[str, Type["Table"]] = None
-    tables: Dict[Type["Table"], "Table"] = None
 
     def __init_subclass__(cls, **_kws):
         cls.table_types = {}
@@ -39,7 +38,9 @@ class Omen(abc.ABC):
 
     def __init__(self, db: DbBase, module=None, **table_types):
         """Create a new manager with a db connection."""
-        self.tables = {}
+        # if you initialize two instances with different table types, each will use its own
+        self.table_types = self.table_types.copy()
+        self.tables: Dict[Type["Table"], "Table"] = {}
         self.db = db
 
         self._create_if_needed()
@@ -47,7 +48,7 @@ class Omen(abc.ABC):
         self.table_types.update(table_types)
 
         if module:
-            self._init_module(module)
+            self._init_module(module, self.table_types)
 
         for name, table_type in self.table_types.items():
             # allow user to specify the table name this way instead
@@ -163,16 +164,16 @@ class Omen(abc.ABC):
         except (ImportError, SyntaxError):
             generated = CodeGen.generate_from_class(cls)
 
-        cls._init_module(generated)
+        cls._init_module(generated, cls.table_types)
 
         return generated
 
     @classmethod
-    def _init_module(cls, module):
+    def _init_module(cls, module, table_types):
         for name in getattr(module, "__all__", dir(module)):
             table_type = getattr(module, name)
             if isinstance(table_type, type) and issubclass(table_type, Table):
-                cls.table_types[table_type.table_name] = table_type
+                table_types[table_type.table_name] = table_type
 
     @staticmethod
     def __multi_query(db, sql):
