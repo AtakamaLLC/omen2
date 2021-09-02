@@ -231,11 +231,11 @@ class ObjBase:
         return super().__getattribute__(k)
 
     @classmethod
-    def __get_type(cls, k) -> Type:
+    def __get_type(cls, k) -> Type:  # pylint: disable=unused-private-member
         return cls.__annotations__.get(k, None)
 
     @staticmethod
-    def __accept_instance(v, typ):
+    def __accept_instance(v, typ):  # pylint: disable=unused-private-member
         if typ is Any:
             return True
         if type(v) is int and issubclass(typ, float):
