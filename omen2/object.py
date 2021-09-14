@@ -232,7 +232,16 @@ class ObjBase:
 
     @classmethod
     def __get_type(cls, k) -> Type:  # pylint: disable=unused-private-member
-        return cls.__annotations__.get(k, None)
+        if k not in cls.__annotations__:
+            typ = None
+            for c in cls.mro():
+                ann = getattr(c, "__annotations__", {})
+                if k in ann:
+                    typ = ann.get(k, None)
+            # cache result
+            cls.__annotations__[k] = typ
+            return typ
+        return cls.__annotations__[k]
 
     @staticmethod
     def __accept_instance(v, typ):  # pylint: disable=unused-private-member
@@ -247,8 +256,7 @@ class ObjBase:
             return True
 
     @classmethod
-    def __assert_instance(cls, k, v):
-        typ = cls.__get_type(k)
+    def __assert_instance(cls, k, v, typ):
         if getattr(typ, "__origin__", None) is Union:
             for sub in typ.__args__:
                 if cls.__accept_instance(v, sub):
@@ -264,9 +272,14 @@ class ObjBase:
         """
         if not hasattr(self, k):
             raise AttributeError("Attribute %s not defined" % k)
+        self._checktype(k, v)
+
+    def _checktype(self, k, v):
+        """Check if type of value is allowed."""
         if self._type_check:
-            if k in self.__annotations__:
-                self.__assert_instance(k, v)
+            typ = self.__get_type(k)
+            if typ:
+                self.__assert_instance(k, v, typ)
 
     def __setattr__(self, k, v):
         if k[0] == "_":
@@ -275,6 +288,8 @@ class ObjBase:
 
         if self.__meta:
             self._checkattr(k, v)
+        else:
+            self._checktype(k, v)
 
         if self.__meta and not self.__meta.suppress_set_changes:
             if self.__meta.table and not self.__meta.locked:
