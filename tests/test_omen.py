@@ -13,9 +13,9 @@ import pytest
 from notanorm import SqliteDb
 from notanorm.errors import IntegrityError
 
-from omen2 import Omen, ObjBase, Relation
+from omen2 import Omen, ObjBase, Relation, ObjCache
 from omen2.object import CustomType
-from omen2.table import ObjCache, Table
+from omen2.table import Table
 from omen2.errors import (
     OmenNoPkError,
     OmenKeyError,
