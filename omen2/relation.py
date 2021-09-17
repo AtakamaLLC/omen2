@@ -1,3 +1,4 @@
+from contextlib import suppress
 from typing import TypeVar, Callable, Iterable, TYPE_CHECKING, List, Optional
 
 from .selectable import Selectable
@@ -38,6 +39,8 @@ class Relation(Selectable[T]):
 
     @property
     def table(self):
+        if not self.is_bound():
+            return None
         if not self.__table:
             mgr: "Omen" = self._from._table.manager
             self.__table: "Table" = mgr.get_table_by_name(self.table_type.table_name)
@@ -52,6 +55,12 @@ class Relation(Selectable[T]):
         TODO: could allow adding by **kws primary key (like m2m adds)
         """
         if not self.is_bound():
+            try:
+                self._link_obj(obj)
+            except AttributeError:
+                # allowed if you're adding an object that will be committed later
+                # needed for test_readme to pass: car with pre-constructed unbound doors
+                pass
             self.__saved.append(obj)
         else:
             self._link_obj(obj)
@@ -94,7 +103,8 @@ class Relation(Selectable[T]):
                 yield obj
 
     def _link_obj(self, obj):
-        obj._table = self.table
+        if self.table:
+            obj._table = self.table
         with obj:
             for k, v in self._where.items():
                 if isinstance(v, Callable):
@@ -112,6 +122,7 @@ class Relation(Selectable[T]):
             if not item._is_bound:
                 item._bind(manager=manager)
             self._link_obj(item)
+            item._commit()
         self.__saved.clear()
 
     def __iter__(self):

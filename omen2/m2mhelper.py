@@ -9,7 +9,7 @@ from typing import (
     Tuple,
     Union,
     Generic,
-    Optional,
+    Optional, List,
 )
 
 from .relation import Relation
@@ -123,6 +123,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
             types:  tuple(M2M Table Type, Related Table Type)
             where:  tuple(where_dict for self, where_dict for related)
         """
+        self.__saved: List[M2MMixObj] = []
         self.__field_map = where
         self.__table2 = None
 
@@ -148,6 +149,8 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         Memoized getter/shortcut.
         """
         if not self.__table2:
+            if not self._from._is_bound:
+                return None
             mgr: "Omen" = self._from._table.manager
             self.__table2: "Table" = mgr.get_table_by_name(self.table_type_2.table_name)
             self.table_type_2 = type(self.__table2)
@@ -168,6 +171,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
 
     def add(self, obj_or_id: T2 = None, **kws) -> Union[T2, M2MMixObj[T1, T2]]:
         """Add a member of the m2m list, with extra kws for the m2m row."""
+
         if obj_or_id is None or not isinstance(obj_or_id, (M2MMixObj, ObjBase)):
             # we have to call "get" on table 2, to get the obj
             # but we want to only use the primary keys of table 2
@@ -184,6 +188,12 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
 
         self.__resolve_where(kws, side=0, invert=False)
         self.__resolve_where(kws, side=1, obj=obj, invert=False)
+
+        if not self.table_2:
+            res = self.table_type.row_type(**kws)
+            new_mix = M2MMixObj(res, obj)
+            self.__saved.append(new_mix)
+            return new_mix
 
         res = self.table.new(**kws)
         super().add(res)
@@ -207,6 +217,11 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
             for sub in self.table_2.select(kws2):
                 if sub._matches(kws3):
                     yield M2MMixObj(rel, sub)
+
+        for mix in self.__saved:
+            if mix._obj1._matches(kws):
+                if mix._obj2._matches(kws2):
+                    yield mix
 
     def __call__(self, _id=None, **kws) -> Optional[Union[T2, M2MMixObj[T1, T2]]]:
         # noinspection PyProtectedMember
@@ -241,14 +256,43 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         if _id is not None:
             # if you only specify an id, we assume you mean the related-table's pk
             # get-semantics for the related table will pick the right fields
-            obj = self.table_2.get(_id)
-            if not obj:
-                return None
-            # then we convert that to a where clause on the m2m table
-            # and merge it in with any other keywords specified
             self.__resolve_where(kws, side=0, invert=False)
-            self.__resolve_where(kws, side=1, obj=obj, invert=False)
+
+            if self.table_2:
+                if not isinstance(_id, ObjBase):
+                    # grab by id from table 2
+                    obj = self.table_2.get(_id)
+                    if not obj:
+                        return None
+                else:
+                    # i'm already a table 2 instance
+                    obj = _id
+                # then we convert that to a where clause on the m2m table
+                # and merge it in with any other keywords specified
+                self.__resolve_where(kws, side=1, obj=obj, invert=False)
+            else:
+                if isinstance(_id, ObjBase):
+                    kws.update(_id._to_pk())
+                elif len(self.table_type_2.row_type._pk) == 1:
+                    kws[self.table_type_2.row_type._pk[0]] = _id
         return self.select_one(**kws) or _default
 
     def __contains__(self, item):
         return self.get(item) is not None
+
+    def commit(self, manager=None):
+        """Bind/add any items were added while I was unbound.
+
+        # TODO: relation-with-blocks that track changes, just like their parents.
+        """
+        if not manager:
+            manager = self.table.manager
+        for item in self.__saved:
+            if not item._obj1._is_bound:
+                item._obj1._bind(manager=manager)
+                item._obj1._commit()
+            if not item._obj2._is_bound:
+                item._obj2._bind(manager=manager)
+                item._obj1._commit()
+            self._link_obj(item)
+        self.__saved.clear()
