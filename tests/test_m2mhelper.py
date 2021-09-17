@@ -151,6 +151,7 @@ def test_m2m_add():
     # add/remove obj
     grp1.peeps.add(peep1)
     assert grp1.peeps.get(peep1.id)
+    assert peep1.id in grp1.peeps
     grp1.peeps.remove(peep1)
     assert grp1.peeps.get(peep1.id) is None
 

@@ -4,6 +4,7 @@ import logging as log
 import time
 from contextlib import suppress
 from multiprocessing.pool import ThreadPool
+from typing import List, Any, Optional, Union
 from unittest.mock import patch
 from types import ModuleType
 
@@ -507,6 +508,8 @@ def test_any_type():
 
 class InlineBasic(ObjBase):
     _pk = ("id",)
+    id: int
+    data: int
 
     # noinspection PyShadowingBuiltins
     def __init__(self, *, id=None, data=None, **kws):
@@ -883,6 +886,58 @@ def test_type_checking():
     with car:
         car.color = b"ggh"
 
+
+def test_type_custom():
+    class Harbinger(Omen):
+        @classmethod
+        def schema(cls, version):
+            return "create table basic (id integer primary key, data integer)"
+
+    class Basic(InlineBasic):
+        _type_check = True
+        other: Any
+        flt: float
+        wack: List[str]
+        opt: Optional[str]
+        un: Union[str, int]
+
+        def __init__(self, id, data, other, flt, wack=None, opt=None, un: Union[str, int]=0):
+            self.other = other
+            self.flt = flt
+            self.wack = wack or []
+            self.opt = opt
+            self.un = un
+            super().__init__(id=id, data=data)
+
+    class Basics(Table):
+        table_name = "basic"
+        row_type = Basic
+
+    db = SqliteDb(":memory:")
+    mgr = Harbinger(db)
+    mgr.basics = Basics(mgr)
+
+    Basic(4, 5, 6, 7)
+
+    # list of integers is allowed, because we don't check complex types, this is mostly for sql checking!
+    Basic(4, 5, 6, 7, [9])
+    Basic(4, 5, 6, 7.1, [9])
+
+    with pytest.raises(TypeError):
+        Basic(4, 5, 6, "not")
+
+    with pytest.raises(TypeError):
+        Basic(4.1, 5, 6, 7)
+
+    with pytest.raises(TypeError):
+        Basic(4, 5, 6, 7, opt=5)
+
+    Basic(4, 5, 6, 7, opt=None)
+
+    with pytest.raises(TypeError):
+        Basic(4, 5, 6, 7, un=None)
+    Basic(4, 5, 6, 7, un=4)
+    Basic(4, 5, 6, 7, un="whatever")
 
 def test_disable_allow_auto():
     db = SqliteDb(":memory:")
