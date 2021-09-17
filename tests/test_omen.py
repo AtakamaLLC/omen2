@@ -856,3 +856,18 @@ def test_multi_pk_issues():
     b.subs.add(Sub(sub="what"))
 
     assert db.select_one("subs", id1=4, id2=5).sub == "what"
+
+
+def test_unbound_add():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+    car = Car(id=44, gas_level=0, color="green")
+    door = gen_objs.doors_row(type="a")
+    car.doors.add(door)
+    assert door.carid == car.id
+    assert door.carid
+    assert door in car.doors
+    assert car.doors.select_one(type="a")
+    mgr.cars.add(car)
+    assert db.select_one("doors", carid=car.id, type="a")
