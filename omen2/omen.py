@@ -36,7 +36,7 @@ class Omen(abc.ABC):
             cls.__multi_query(db, cls.schema(cls.version))
             cls.model: DbModel = db.model()
 
-    def __init__(self, db: DbBase, module=None, **table_types):
+    def __init__(self, db: DbBase, module=None, type_checking=False, **table_types):
         """Create a new manager with a db connection."""
         # if you initialize two instances with different table types, each will use its own
         self.table_types = self.table_types.copy()
@@ -54,6 +54,8 @@ class Omen(abc.ABC):
             # allow user to specify the table name this way instead
             if not hasattr(table_type, "table_name"):
                 table_type.table_name = name
+            if getattr(table_type, "_type_check", None) is None:
+                table_type._type_check = type_checking
             table_type(self)
 
     def get_table_by_name(self, table_name):
@@ -186,6 +188,7 @@ class Omen(abc.ABC):
             db.query(q)
 
     def _create_if_needed(self):
+        # TODO: this should be removed, not good behavior
         mod1 = self.db.model()
         mod2 = self.model
         mod1.pop("_omen", None)

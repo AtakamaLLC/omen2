@@ -4,11 +4,9 @@ import logging as log
 import time
 from contextlib import suppress
 from multiprocessing.pool import ThreadPool
-from typing import List, Any, Optional, Union
 from unittest.mock import patch
 from types import ModuleType
 
-import notanorm.errors
 import pytest
 from notanorm import SqliteDb
 from notanorm.errors import IntegrityError
@@ -24,56 +22,11 @@ from omen2.errors import (
     OmenRollbackError,
     OmenLockingError,
 )
-from tests.schema import MyOmen
-
-MyOmen.codegen()
+from tests.schema import MyOmen, Cars, Car, InlineBasic, CarDriver, CarDrivers
 
 import tests.schema_gen as gen_objs
 
 # every table has a row_type, you can derive from it
-
-
-class CarDriver(gen_objs.car_drivers_row):
-    def __init__(self, **kws):
-        self.drivers = gen_objs.drivers_relation(
-            self, where={"id": lambda: self.driverid}, cascade=False
-        )
-        super().__init__(**kws)
-
-
-class CarDrivers(gen_objs.car_drivers[CarDriver]):
-    row_type = CarDriver
-
-
-class Car(gen_objs.cars_row):
-    def __init__(self, color="black", **kws):
-        self.not_saved_to_db = "some thing"
-        self.doors = gen_objs.doors_relation(
-            self, kws.pop("doors", None), where={"carid": lambda: self.id}, cascade=True
-        )
-        self.car_drivers = gen_objs.car_drivers_relation(
-            self, where={"carid": lambda: self.id}, cascade=True
-        )
-        super().__init__(color=color, **kws)
-
-    def __create__(self):
-        # called when a new, empty car is created, but not when one is loaded from a row
-        # defaults from the db should be preloaded
-        assert self.gas_level == 1.0
-
-        # but you can add your own
-        self.color = "default black"
-
-    @property
-    def gas_pct(self):
-        # read only props are fine
-        return self.gas_level * 100
-
-
-# every db table has a type, you can derive from it
-class Cars(gen_objs.cars[Car]):
-    # redefine the row_type used
-    row_type = Car
 
 
 def test_readme(tmp_path):
@@ -506,18 +459,6 @@ def test_any_type():
     assert mgr[whatever].select_one(any="change")
 
 
-class InlineBasic(ObjBase):
-    _pk = ("id",)
-    id: int
-    data: int
-
-    # noinspection PyShadowingBuiltins
-    def __init__(self, *, id=None, data=None, **kws):
-        self.id = id
-        self.data = data
-        super().__init__(**kws)
-
-
 def test_inline_omen_no_codegen():
     # noinspection PyAbstractClass
     class Harbinger(Omen):
@@ -852,92 +793,6 @@ def test_other_attrs():
     assert mgr.basic.select_one(custom_thing=44)
     assert not mgr.basic.select_one(custom_thing=43)
 
-
-def test_type_checking():
-    db = SqliteDb(":memory:")
-    mgr = MyOmen(db)
-    Car._type_check = True
-
-    mgr.cars = Cars(mgr)
-    car = mgr.cars.add(Car(gas_level=0, color="green"))
-
-    with pytest.raises(TypeError):
-        with car:
-            car.color = None
-
-    with pytest.raises(TypeError):
-        with car:
-            car.color = 4
-
-    with pytest.raises(TypeError):
-        with car:
-            car.gas_level = "hello"
-
-    with pytest.raises(TypeError):
-        with car:
-            car.color = b"ggh"
-
-    car._type_check = False
-    with pytest.raises(notanorm.errors.IntegrityError):
-        with car:
-            car.color = None
-
-    # sqlite allows this, so we do too, since type checking is off
-    with car:
-        car.color = b"ggh"
-
-
-def test_type_custom():
-    class Harbinger(Omen):
-        @classmethod
-        def schema(cls, version):
-            return "create table basic (id integer primary key, data integer)"
-
-    class Basic(InlineBasic):
-        _type_check = True
-        other: Any
-        flt: float
-        wack: List[str]
-        opt: Optional[str]
-        un: Union[str, int]
-
-        def __init__(self, id, data, other, flt, wack=None, opt=None, un: Union[str, int]=0):
-            self.other = other
-            self.flt = flt
-            self.wack = wack or []
-            self.opt = opt
-            self.un = un
-            super().__init__(id=id, data=data)
-
-    class Basics(Table):
-        table_name = "basic"
-        row_type = Basic
-
-    db = SqliteDb(":memory:")
-    mgr = Harbinger(db)
-    mgr.basics = Basics(mgr)
-
-    Basic(4, 5, 6, 7)
-
-    # list of integers is allowed, because we don't check complex types, this is mostly for sql checking!
-    Basic(4, 5, 6, 7, [9])
-    Basic(4, 5, 6, 7.1, [9])
-
-    with pytest.raises(TypeError):
-        Basic(4, 5, 6, "not")
-
-    with pytest.raises(TypeError):
-        Basic(4.1, 5, 6, 7)
-
-    with pytest.raises(TypeError):
-        Basic(4, 5, 6, 7, opt=5)
-
-    Basic(4, 5, 6, 7, opt=None)
-
-    with pytest.raises(TypeError):
-        Basic(4, 5, 6, 7, un=None)
-    Basic(4, 5, 6, 7, un=4)
-    Basic(4, 5, 6, 7, un="whatever")
 
 def test_disable_allow_auto():
     db = SqliteDb(":memory:")

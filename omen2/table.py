@@ -2,7 +2,7 @@ import weakref
 from contextlib import suppress
 from typing import Set, Dict, Iterable, TYPE_CHECKING, TypeVar
 
-from .errors import OmenNoPkError, OmenDuplicateObjectError
+from .errors import OmenNoPkError
 import logging as log
 
 from .selectable import Selectable
@@ -71,20 +71,21 @@ class Table(Selectable[T]):
 
     def update(self, obj: T, keys: Iterable[str]):
         """Add object to db + cache"""
-        self._add_cache(obj)
         vals = obj._to_db(keys)
         if obj._saved_pk:
             self.db.upsert(self.table_name, obj._saved_pk, **vals)
         else:
             self.db.upsert(self.table_name, **vals)
+        self._add_cache(obj)
 
     def _add_cache(self, obj: T):
         with suppress(OmenNoPkError):
             pk = obj._to_pk_tuple()
         alr = self._cache.get(pk)
-        if alr is not None and alr is not obj:
-            raise OmenDuplicateObjectError
         self._cache[pk] = obj
+        if alr is not None and alr is not obj:
+            # update old refs as best we can
+            alr._update_from_object(obj)
 
     def insert(self, obj: T, id_field):
         """Update the db + cache from object."""

@@ -38,7 +38,7 @@ VERY_LARGE_LOCK_TIMEOUT = 120
 class ObjBase:
     # objects have 2 non-private attributes that can be overridden
     _cascade = True
-    _type_check = False  # whether annotated types are checked in python
+    _type_check = None  # whether annotated types are checked in python
     _pk: Tuple[str, ...] = ()  # list of field names in the db used as the primary key
     _table_type: Type["Table"]  # class derived from Table
     _sync_on_getattr = False  # maybe don't use this feature, it's an "ipc hack"
