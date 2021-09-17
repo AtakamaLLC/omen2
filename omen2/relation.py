@@ -1,4 +1,3 @@
-from contextlib import suppress
 from typing import TypeVar, Callable, Iterable, TYPE_CHECKING, List, Optional
 
 from .selectable import Selectable
