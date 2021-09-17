@@ -29,6 +29,7 @@ class ObjMeta:
     suppress_set_changes = False
     suppress_get_changes = False
     changes: Dict[str, Any] = None
+    in_sync = False
 
 
 VERY_LARGE_LOCK_TIMEOUT = 120
@@ -40,6 +41,7 @@ class ObjBase:
     _type_check = False  # whether annotated types are checked in python
     _pk: Tuple[str, ...] = ()  # list of field names in the db used as the primary key
     _table_type: Type["Table"]  # class derived from Table
+    _sync_on_getattr = False  # maybe don't use this feature, it's an "ipc hack"
 
     # objects should only have 1 variable in __dict__
     __meta: ObjMeta = None
@@ -228,6 +230,22 @@ class ObjBase:
         ):
             return self.__meta.changes.get(k, super().__getattribute__(k))
 
+        if (
+            self._sync_on_getattr
+            and self._is_bound
+            and not self.__meta.locked
+            and not self.__meta.in_sync
+        ):
+            self.__meta.in_sync = True
+            try:
+                res = self._table.db_select(self._to_pk())[0]
+                if k in res:
+                    v = res[k]
+                    self.__dict__[k] = v
+                    return v
+            finally:
+                self.__meta.in_sync = False
+
         return super().__getattribute__(k)
 
     @classmethod
@@ -336,11 +354,15 @@ class ObjBase:
         obj.__dict__ = tmpobj.__dict__  # swap in new dict (atomic)
 
     def _force_apply(self, changes):
+        # this happens when the underlying database changes
         # these attribute sets do not go into the changeset
         # but setters still get triggered normally
-        with self._suppress_set_changes():
-            for k, v in changes.items():
-                setattr(self, k, v)
+        # wait for everyone else to be done writing
+        with self.__meta.lock:
+            with self._suppress_set_changes():
+                # sneak attrs in
+                for k, v in changes.items():
+                    setattr(self, k, v)
 
     def _commit(self):
         """Apply all pending changes to the object, and to the db."""
