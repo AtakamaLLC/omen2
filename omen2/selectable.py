@@ -13,6 +13,7 @@ T = TypeVar("T", bound="ObjBase")
 # noinspection PyDefaultArgument
 class Selectable(Generic[T]):
     """Generic selectable base class."""
+
     # pylint: disable=dangerous-default-value, protected-access
 
     row_type: Type["T"]

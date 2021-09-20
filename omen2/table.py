@@ -20,6 +20,7 @@ U = TypeVar("U", bound="ObjBase")
 # noinspection PyDefaultArgument,PyProtectedMember
 class Table(Selectable[T]):
     """Omen2: Table base class from which tables are derived."""
+
     # pylint: disable=dangerous-default-value, protected-access
 
     table_name: str
@@ -137,6 +138,7 @@ class Table(Selectable[T]):
 # noinspection PyDefaultArgument,PyProtectedMember
 class ObjCache(Selectable[T]):
     """Omen2 object cache: same interface as table, but all objects are preloaded."""
+
     # pylint: disable=dangerous-default-value, protected-access
 
     def __init__(self, table: Table[T]):

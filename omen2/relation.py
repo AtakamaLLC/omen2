@@ -14,6 +14,7 @@ T = TypeVar("T")
 # noinspection PyProtectedMember,PyDefaultArgument
 class Relation(Selectable[T]):
     """Omen2: One to many relationship helper."""
+
     # pylint: disable=protected-access, dangerous-default-value
 
     table_type: "Type[Table[T]]" = None
