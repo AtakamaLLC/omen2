@@ -1,3 +1,5 @@
+"""Omen2: One to many relationship helper."""
+
 from typing import TypeVar, Callable, Iterable, TYPE_CHECKING, List, Optional
 
 from .selectable import Selectable
@@ -11,12 +13,14 @@ T = TypeVar("T")
 
 # noinspection PyProtectedMember,PyDefaultArgument
 class Relation(Selectable[T]):
+    """Omen2: One to many relationship helper."""
     # pylint: disable=protected-access, dangerous-default-value
 
     table_type: "Type[Table[T]]" = None
 
     @property
     def row_type(self):
+        """Get row type"""
         return self.table_type.row_type
 
     def __init__(self, _from: "ObjBase", _init=None, *, where=None, cascade):
@@ -28,16 +32,15 @@ class Relation(Selectable[T]):
         self.__saved: List["ObjBase"] = []
         if _init:
             for ent in _init:
-                if isinstance(ent, dict):
-                    self.add(T(ent))
-                else:
-                    self.add(ent)
+                self.add(ent)
 
     def is_bound(self):
+        """Is this relation bound to the db."""
         return self._from._is_bound
 
     @property
     def table(self):
+        """Get bound table."""
         if not self.is_bound():
             return None
         if not self.__table:
@@ -125,4 +128,5 @@ class Relation(Selectable[T]):
         self.__saved.clear()
 
     def __iter__(self):
+        """Shortcut for self.select"""
         return self.select()

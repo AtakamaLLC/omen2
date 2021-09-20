@@ -1,3 +1,4 @@
+"""Generic selectable support for tables, relations and m2mhelpers."""
 from typing import TypeVar, Generic, Optional, Iterable, TYPE_CHECKING, Type
 
 from omen2.errors import OmenMoreThanOneError, OmenKeyError
@@ -11,6 +12,7 @@ T = TypeVar("T", bound="ObjBase")
 
 # noinspection PyDefaultArgument
 class Selectable(Generic[T]):
+    """Generic selectable base class."""
     # pylint: disable=dangerous-default-value, protected-access
 
     row_type: Type["T"]

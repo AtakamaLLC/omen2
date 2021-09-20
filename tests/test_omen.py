@@ -1,4 +1,5 @@
 import base64
+
 import gc
 import logging as log
 import time
@@ -871,3 +872,29 @@ def test_unbound_add():
     assert car.doors.select_one(type="a")
     mgr.cars.add(car)
     assert db.select_one("doors", carid=car.id, type="a")
+
+
+def test_underlying_delete():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+    car = Car(id=44, gas_level=0, color="green")
+    mgr.cars.add(car)
+    assert db.select_one("cars", id=car.id)
+    db.delete("cars", id=car.id)
+    car2 = Car(id=44, gas_level=0, color="green")
+    mgr.cars.add(car2)
+    assert car2 is not car
+    assert mgr.cars.get(id=44) is car2
+
+
+def test_sync_on_getattr():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+    car = Car(id=44, gas_level=0, color="green")
+    mgr.cars.add(car)
+    car._sync_on_getattr = True
+    assert car.color == "green"
+    db.update("cars", id=car.id, color="blue")
+    assert car.color == "blue"

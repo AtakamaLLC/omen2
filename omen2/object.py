@@ -1,3 +1,5 @@
+"""Omen2 object and associated classes."""
+
 # pylint: disable=protected-access
 
 import logging
@@ -20,6 +22,7 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class ObjMeta:
+    """Object private metadata containing the bound table, a lock, and other flags."""
     lock = RLock()
     locked = False
     new = True
@@ -36,6 +39,7 @@ VERY_LARGE_LOCK_TIMEOUT = 120
 
 # noinspection PyCallingNonCallable,PyProtectedMember
 class ObjBase:
+    """Object base class, from which all objects are derived."""
     # objects have 2 non-private attributes that can be overridden
     _cascade = True
     _type_check = None  # whether annotated types are checked in python

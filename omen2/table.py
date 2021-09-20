@@ -1,3 +1,4 @@
+"""Omen2: Table class and supporting types"""
 import weakref
 from contextlib import suppress
 from typing import Set, Dict, Iterable, TYPE_CHECKING, TypeVar
@@ -12,12 +13,13 @@ if TYPE_CHECKING:
     from .omen import Omen
     from .object import ObjBase
 
-
 T = TypeVar("T", bound="ObjBase")
 U = TypeVar("U", bound="ObjBase")
 
+
 # noinspection PyDefaultArgument,PyProtectedMember
 class Table(Selectable[T]):
+    """Omen2: Table base class from which tables are derived."""
     # pylint: disable=dangerous-default-value, protected-access
 
     table_name: str
@@ -29,6 +31,7 @@ class Table(Selectable[T]):
             cls.row_type._table_type = cls
 
     def __init__(self, mgr: "Omen"):
+        """Bind table to omen manager."""
         self.manager = mgr
         # noinspection PyTypeChecker
         self._cache: Dict[dict, "ObjBase"] = weakref.WeakValueDictionary()
@@ -36,6 +39,7 @@ class Table(Selectable[T]):
 
     @property
     def db(self) -> "DbBase":
+        """Get bound db."""
         return self.manager.db
 
     # noinspection PyCallingNonCallable
@@ -97,6 +101,7 @@ class Table(Selectable[T]):
         self._add_cache(obj)
 
     def db_select(self, where):
+        """Call select on the underlying db, given a where dict of keys/values."""
         return self.db.select(self.table_name, None, where)
 
     def __select(self, where) -> Iterable[T]:
@@ -131,6 +136,7 @@ class Table(Selectable[T]):
 
 # noinspection PyDefaultArgument,PyProtectedMember
 class ObjCache(Selectable[T]):
+    """Omen2 object cache: same interface as table, but all objects are preloaded."""
     # pylint: disable=dangerous-default-value, protected-access
 
     def __init__(self, table: Table[T]):
@@ -138,16 +144,20 @@ class ObjCache(Selectable[T]):
         self.table._cache = {}  # change the weak dict to a permanent dict
 
     def __getattr__(self, item):
+        """Pass though to table on everything but select."""
         return getattr(self.table, item)
 
     def select(self, _where={}, **kws) -> Iterable[T]:
+        """Read objects from the cache."""
         kws.update(_where)
         for v in self.table._cache.values():
             if v._matches(kws):
                 yield v
 
     def reload(self):
+        """Reload the objects in the cache from the db."""
         return sum(1 for _ in self.table.select())
 
     def __iter__(self):
+        """Iterate all cached objects."""
         return self.select()

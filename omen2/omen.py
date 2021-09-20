@@ -59,18 +59,22 @@ class Omen(abc.ABC):
             table_type(self)
 
     def get_table_by_name(self, table_name):
+        """Get table object by table name."""
         return self[self.table_types[table_name]]
 
     def __getitem__(self, table_type: Type[T]) -> T:
+        """Get table object by table type."""
         return self.tables[table_type]
 
     def __setitem__(self, table_type: Type[T], table: T):
+        """Set the table object associated with the table type."""
         assert table_type.table_name == table.table_name
         self.table_types[table.table_name] = table_type
         self._validate_table(table.table_name, table_type)
         self.tables[table_type] = table
 
     def set_table(self, table: Table):
+        """Set the table object associated with teh table type"""
         self[type(table)] = table
 
     def load_dict(self, data_set: Dict[str, Iterable[Dict[str, Any]]]):

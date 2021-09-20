@@ -1,3 +1,4 @@
+"""Omen2: generate python code from a database schema."""
 import keyword
 import os
 import sys
@@ -243,6 +244,7 @@ class CodeGen:
 
 
 def main():
+    """Command line codegen: given a moddule path, generate code."""
     CodeGen.generate_from_path(sys.argv[-1])
 
 

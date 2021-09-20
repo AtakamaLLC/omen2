@@ -1,24 +1,26 @@
+"""Omen2: Public error classes"""
+
 import notanorm.errors
 
 
 class OmenError(RuntimeError):
-    pass
+    """Omen base error class."""
 
 
 class OmenMoreThanOneError(OmenError):
-    pass
+    """Table has more than one matching row, but only one was expected."""
 
 
 class OmenNoPkError(OmenError, ValueError):
-    pass
+    """Object has None in one or more of its primary key fields, and is attempted to commit to the db"""
 
 
 class OmenKeyError(OmenError, KeyError):
-    pass
+    """Searched-for object doesn't exist, but one is expected."""
 
 
 class OmenUseWithError(OmenError):
-    pass
+    """Atempting to modify an object outside of a database modification block."""
 
 
 class OmenRollbackError(OmenError):
@@ -29,4 +31,5 @@ class OmenLockingError(Exception):
     """Deadlock detection.  If this is thrown, the system should drop out/die/fail hard."""
 
 
-IntegrityError = notanorm.errors.IntegrityError
+class IntegrityError(OmenError, notanorm.errors.IntegrityError):
+    """Attempt to add dup private key."""

@@ -1,3 +1,5 @@
+"""Many-to-many relationship helper.   Provides nice syntax for interacting with m2m relationships."""
+
 from omen2.object import ObjBase
 from omen2.errors import OmenKeyError
 
@@ -9,7 +11,8 @@ from typing import (
     Tuple,
     Union,
     Generic,
-    Optional, List,
+    Optional,
+    List,
 )
 
 from .relation import Relation
@@ -28,6 +31,8 @@ class M2MMixObj(Generic[T1, T2]):
 
     Using "with" and comparing them does what you would expect (T1a == T1a and T1a == T2b).
     """
+
+    # pylint: disable=protected-access
 
     __ready = False
     _obj1 = None
@@ -224,6 +229,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
                     yield mix
 
     def __call__(self, _id=None, **kws) -> Optional[Union[T2, M2MMixObj[T1, T2]]]:
+        """Grab a specific entry by primary key or raise an error."""
         # noinspection PyProtectedMember
         if _id is not None:
             # if the user specifies a positional, we assume they mean the sub-table
@@ -232,6 +238,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         return super().__call__(**kws)
 
     def remove(self, obj_or_id: "ObjBase" = None, **kws):
+        """Remove a specific entry by primary key or raise an error."""
         if not isinstance(obj_or_id, (ObjBase, M2MMixObj)) or not obj_or_id:
             # we have to call "get" to get the obj
             obj = self.get(obj_or_id, None, **kws)
