@@ -39,6 +39,7 @@ def test_codegen_pathed():
     assert mod.cars_relation
 
 
+# noinspection PyUnresolvedReferences
 def test_codegen_main():
     sys.argv = ["progname", "tests.schema.MyOmen"]
     main()
