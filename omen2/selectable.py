@@ -49,9 +49,6 @@ class Selectable(Generic[T]):
             raise OmenKeyError("%s in %s" % (kws, self.__class__.__name__))
         return ret
 
-    def __iter__(self):
-        return self.select()
-
     def select_one(self, _where={}, **kws) -> Optional[T]:
         """Return one row, None, or raises an OmenMoreThanOneError."""
         itr = self.select(_where, **kws)
@@ -77,7 +74,7 @@ class Selectable(Generic[T]):
 
     def count(self, _where={}, **kws) -> int:
         """Return count of objs matchig where clause.  Override for efficiency."""
-        return sum(1 for _ in self.select())
+        return sum(1 for _ in self.select(_where, **kws))
 
     def __len__(self):
         """Return count of objs."""
