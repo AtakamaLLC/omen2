@@ -300,6 +300,6 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
                 item._obj1._commit()
             if not item._obj2._is_bound:
                 item._obj2._bind(manager=manager)
-                item._obj1._commit()
+                item._obj2._commit()
             self._link_obj(item)
         self.__saved.clear()

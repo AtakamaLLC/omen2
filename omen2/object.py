@@ -407,13 +407,13 @@ class ObjBase:
         """
         cascade = self._get_related() if self._cascade else {}
 
-        if self.__meta.table:
-            table = self.__meta.table
-            table._remove(self)
-
         for rel, objs in cascade.items():
             for obj in objs:
                 rel.remove(obj)
+
+        if self.__meta.table:
+            table = self.__meta.table
+            table._remove(self)
 
     def _save(self, keys: Iterable[str]):
         """Save myself to my table."""

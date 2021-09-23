@@ -76,14 +76,6 @@ class Relation(Selectable[T]):
         """
         self.table.remove(obj)
 
-    def __len__(self):
-        """Inefficient count.
-
-
-        TODO: Could be more efficient, and call self.table.count(**where)
-        """
-        return sum(1 for _ in self.select())
-
     def select(self, _where={}, **kws) -> Iterable[T]:
         """Works like select on the related table, except it is filtered by those matching my relation.
 
@@ -127,7 +119,3 @@ class Relation(Selectable[T]):
             self._link_obj(item)
             item._commit()
         self.__saved.clear()
-
-    def __iter__(self):
-        """Shortcut for self.select"""
-        return self.select()

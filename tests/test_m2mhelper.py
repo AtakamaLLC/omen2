@@ -190,6 +190,9 @@ def test_m2m_subsorts():
     assert srt == expect
 
 
+    assert len(grp1.peeps) == 4
+    assert grp1.peeps.count() == 4
+
 @pytest.mark.parametrize("who_adds", [Group, Peep])
 def test_m2m_unbound(who_adds):
     db = SqliteDb(":memory:")
