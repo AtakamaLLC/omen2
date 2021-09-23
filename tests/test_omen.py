@@ -23,6 +23,7 @@ from omen2.errors import (
     OmenRollbackError,
     OmenLockingError,
 )
+
 from tests.schema import MyOmen, Cars, Car, InlineBasic, CarDriver, CarDrivers
 
 import tests.schema_gen as gen_objs

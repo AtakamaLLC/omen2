@@ -3,6 +3,7 @@ from notanorm import SqliteDb
 
 from omen2 import Omen, OmenKeyError
 from omen2.m2mhelper import M2MHelper
+from .schema import temp_path
 
 
 class Harbinger(Omen):
@@ -15,8 +16,8 @@ class Harbinger(Omen):
             """
 
 
-Harbinger.codegen()
-from . import test_m2mhelper_gen as module
+module = Harbinger.codegen(out_path=temp_path())
+
 
 # noinspection PyShadowingBuiltins
 class Group(module.groups_row):

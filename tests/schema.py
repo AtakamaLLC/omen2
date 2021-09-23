@@ -1,4 +1,27 @@
+import atexit
+import os
+import tempfile
+from contextlib import suppress
+
 from omen2 import Omen, ObjBase
+
+
+_temp_paths = []
+
+
+def temp_path():
+    path = tempfile.NamedTemporaryFile(delete=False).name
+    _temp_paths.append(path)
+    return path
+
+
+def _cleanup_temp():
+    for file in _temp_paths:
+        with suppress(FileNotFoundError):
+            os.unlink(file)
+
+
+atexit.register(_cleanup_temp)
 
 
 class MyOmen(Omen):
@@ -20,10 +43,7 @@ class MyOmen(Omen):
         """
 
 
-MyOmen.codegen()
-
-
-from tests import schema_gen as gen_objs
+gen_objs = MyOmen.codegen(out_path=temp_path())
 
 
 class Car(gen_objs.cars_row):
