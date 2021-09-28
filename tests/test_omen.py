@@ -23,6 +23,7 @@ from omen2.errors import (
     OmenRollbackError,
     OmenLockingError,
 )
+
 from tests.schema import MyOmen, Cars, Car, InlineBasic, CarDriver, CarDrivers
 
 import tests.schema_gen as gen_objs
@@ -898,3 +899,19 @@ def test_sync_on_getattr():
     assert car.color == "green"
     db.update("cars", id=car.id, color="blue")
     assert car.color == "blue"
+
+
+def test_cache_sharing():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+    cache = ObjCache(mgr.cars)
+    car = Car(id=44, gas_level=0, color="green")
+    cache.add(car)
+    assert car in mgr.cars
+    assert car in cache
+    db.insert("cars", id=45, gas_level=45, color="blue")
+    assert cache.get(id=44)
+    assert not cache.select_one(id=45)
+    assert mgr.cars.select_one(id=45)
+    assert cache.select_one(id=45)

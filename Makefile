@@ -11,8 +11,7 @@ lint:
 	black omen2
 
 test:
-	rm -f tests/*_gen.py
-	pytest --cov omen2 -v tests
+	pytest -n=3 --cov omen2 -v tests
 
 publish:
 	rm -rf dist

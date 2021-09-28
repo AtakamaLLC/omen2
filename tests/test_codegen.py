@@ -1,3 +1,4 @@
+import os
 import sys
 
 from omen2 import Omen
@@ -5,7 +6,9 @@ from omen2.codegen import CodeGen, main
 from typing import Any, Optional
 
 
-def test_codegen():
+def test_codegen(tmp_path):
+    out_path = str(tmp_path / "gen.py")
+
     class Test(Omen):
         @classmethod
         def schema(cls, version):
@@ -20,7 +23,7 @@ def test_codegen():
                 );
             """
 
-    mod = Test.codegen()
+    mod = Test.codegen(out_path=out_path)
 
     zap = mod.zappy_row(nonnull="val")
     assert zap.floaty == 1.0
@@ -32,17 +35,20 @@ def test_codegen():
     assert zap.__annotations__["nonnull"] is str
 
 
-def test_codegen_pathed():
-    mod = CodeGen.generate_from_path("tests.schema.MyOmen")
+def test_codegen_pathed(tmp_path):
+    p = tmp_path / "gen.py"
+    mod = CodeGen.generate_from_path("tests.schema.MyOmen", out_path=str(p))
     assert mod.cars
     assert mod.cars_row
     assert mod.cars_relation
+    sys.modules.pop(mod.__name__)
 
 
 # noinspection PyUnresolvedReferences
 def test_codegen_main():
+    sys.modules.pop("tests", None)
     sys.argv = ["progname", "tests.schema.MyOmen"]
     main()
     import tests.schema_gen
-
     assert tests.schema_gen.cars
+    os.unlink(tests.schema_gen.__file__)

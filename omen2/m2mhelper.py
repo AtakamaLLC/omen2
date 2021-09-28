@@ -252,9 +252,6 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
             obj = obj_or_id
         super().remove(obj._obj1)
 
-    def __iter__(self):
-        return self.select()
-
     def __len__(self):
         return sum(1 for _ in self.select())
 

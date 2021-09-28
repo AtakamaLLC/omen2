@@ -152,7 +152,7 @@ class Omen(abc.ABC):
                 tab.row_type._table_type = tab
 
     @classmethod
-    def codegen(cls, only_if_missing=False):
+    def codegen(cls, only_if_missing=False, out_path=None):
         """Generate code derived from my model, and put it next to my __file__."""
         if cls.__module__ == "__main__":
             module, _ = os.path.splitext(
@@ -168,7 +168,7 @@ class Omen(abc.ABC):
                 raise ImportError
             generated = importlib.import_module(module)
         except (ImportError, SyntaxError):
-            generated = CodeGen.generate_from_class(cls)
+            generated = CodeGen.generate_from_class(cls, out_path=out_path)
 
         cls._init_module(generated, cls.table_types)
 

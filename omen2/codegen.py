@@ -1,10 +1,12 @@
 """Omen2: generate python code from a database schema."""
+import argparse
 import keyword
 import os
 import sys
 import importlib
 import importlib.util
 import logging as log
+from types import ModuleType
 
 from notanorm import DbTable, DbCol
 
@@ -216,36 +218,52 @@ class CodeGen:
             module = importlib.import_module(module, self.package)
         return getattr(module, self.class_name)
 
-    def import_generated(self):
+    def import_generated(self, out_path):
         """Import the module this codegen generated."""
-        module = "." + self.module if self.package else self.module
-        module = importlib.import_module(module + "_gen", self.package)
+        gen_name = self.module + "_gen"
+        module_name = self.package + "." + gen_name if self.package else gen_name
+        with open(out_path, "r", encoding="utf8") as f:
+            code = compile(f.read(), out_path, "exec")
+            module = ModuleType(module_name, "generated from %s" % self.module)
+            module.__file__ = out_path
+            exec(code, module.__dict__)  # pylint: disable=exec-used
+            sys.modules[module_name] = module
+        if self.package:
+            parent = importlib.import_module(self.package)
+            setattr(parent, gen_name, module)
         return module
 
     @staticmethod
-    def generate_from_class(class_type):
+    def generate_from_class(class_type, out_path=None):
         """Given a class derived from omen2.Omen, generate omen2 code."""
         class_path = class_type.__module__ + "." + class_type.__name__
-        return CodeGen.generate_from_path(class_path, class_type)
+        return CodeGen.generate_from_path(class_path, class_type, out_path)
 
     @staticmethod
-    def generate_from_path(class_path, class_type=None):
+    def generate_from_path(class_path, class_type=None, out_path=None):
         """Given a dotted python path name, generate omen2 code."""
         cg = CodeGen(class_path, class_type)
 
-        out_path = cg.output_path()
-        tmp_path = out_path + ".tmp"
+        dest_path = out_path or cg.output_path()
+        tmp_path = dest_path + ".tmp"
         with open(tmp_path, "w", encoding="utf8") as outf:
             cg.gen_monolith(outf)
 
-        os.replace(tmp_path, out_path)
+        os.replace(tmp_path, dest_path)
 
-        return cg.import_generated()
+        return cg.import_generated(dest_path)
 
 
 def main():
     """Command line codegen: given a moddule path, generate code."""
-    CodeGen.generate_from_path(sys.argv[-1])
+    parser = argparse.ArgumentParser(description="Generate omen2 database-linked code")
+    parser.add_argument(
+        "module",
+        help="Python import path for a module contains a class derived from omen2.Omen",
+    )
+    parser.add_argument("--out", "-o", help="Output file path", action="store")
+    args = parser.parse_args()
+    CodeGen.generate_from_path(args.module, out_path=args.out)
 
 
 if __name__ == "__main__":
