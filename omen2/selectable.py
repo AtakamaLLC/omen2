@@ -49,9 +49,6 @@ class Selectable(Generic[T]):
             raise OmenKeyError("%s in %s" % (kws, self.__class__.__name__))
         return ret
 
-    def __iter__(self):
-        return self.select()
-
     def select_one(self, _where={}, **kws) -> Optional[T]:
         """Return one row, None, or raises an OmenMoreThanOneError."""
         itr = self.select(_where, **kws)

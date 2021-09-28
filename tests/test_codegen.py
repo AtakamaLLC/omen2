@@ -44,6 +44,7 @@ def test_codegen_pathed(tmp_path):
     sys.modules.pop(mod.__name__)
 
 
+# noinspection PyUnresolvedReferences
 def test_codegen_main():
     sys.modules.pop("tests", None)
     sys.argv = ["progname", "tests.schema.MyOmen"]

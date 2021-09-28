@@ -34,6 +34,7 @@ def test_type_checking():
             car.color = b"ggh"
 
     car._type_check = False
+    # notanorm integrity error because color is a required field
     with pytest.raises(notanorm.errors.IntegrityError):
         with car:
             car.color = None
@@ -93,6 +94,7 @@ def test_type_custom():
     Basic(4, 5, 6, 7, opt=None)
 
     with pytest.raises(TypeError):
+        # noinspection PyTypeChecker
         Basic(4, 5, 6, 7, un=None)
     Basic(4, 5, 6, 7, un=4)
     Basic(4, 5, 6, 7, un="whatever")
