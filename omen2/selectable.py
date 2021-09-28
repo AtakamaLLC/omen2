@@ -74,14 +74,10 @@ class Selectable(Generic[T]):
         """Read objects of specified class."""
         raise NotImplementedError
 
-
     def count(self, _where={}, **kws) -> int:
         """Return count of objs matchig where clause.  Override for efficiency."""
-        return sum(1 for _ in self.select())
+        return sum(1 for _ in self.select(_where, **kws))
 
     def __len__(self):
         """Return count of objs."""
         return self.count()
-
-    def __iter__(self):
-        return self.select()

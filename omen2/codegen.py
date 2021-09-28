@@ -222,11 +222,11 @@ class CodeGen:
         """Import the module this codegen generated."""
         gen_name = self.module + "_gen"
         module_name = self.package + "." + gen_name if self.package else gen_name
-        with open(out_path) as f:
-            code = compile(f.read(), out_path, 'exec')
+        with open(out_path, "r", encoding="utf8") as f:
+            code = compile(f.read(), out_path, "exec")
             module = ModuleType(module_name, "generated from %s" % self.module)
             module.__file__ = out_path
-            exec(code, module.__dict__)
+            exec(code, module.__dict__)  # pylint: disable=exec-used
             sys.modules[module_name] = module
         if self.package:
             parent = importlib.import_module(self.package)
@@ -256,9 +256,12 @@ class CodeGen:
 
 def main():
     """Command line codegen: given a moddule path, generate code."""
-    parser = argparse.ArgumentParser(description='Generate omen2 database-linked code')
-    parser.add_argument('module', help='Python import path for a module contains a class derived from omen2.Omen')
-    parser.add_argument('--out', '-o', help='Output file path', action="store")
+    parser = argparse.ArgumentParser(description="Generate omen2 database-linked code")
+    parser.add_argument(
+        "module",
+        help="Python import path for a module contains a class derived from omen2.Omen",
+    )
+    parser.add_argument("--out", "-o", help="Output file path", action="store")
     args = parser.parse_args()
     CodeGen.generate_from_path(args.module, out_path=args.out)
 
