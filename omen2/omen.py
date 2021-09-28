@@ -27,7 +27,6 @@ class Omen(abc.ABC):
     version: Optional[int] = None
     model: DbModel = None
     table_types: Dict[str, Type["Table"]] = None
-    tables: Dict[Type["Table"], "Table"] = None
 
     def __init_subclass__(cls, **_kws):
         cls.table_types = {}
@@ -37,34 +36,45 @@ class Omen(abc.ABC):
             cls.__multi_query(db, cls.schema(cls.version))
             cls.model: DbModel = db.model()
 
-    def __init__(self, db: DbBase, **table_types):
+    def __init__(self, db: DbBase, module=None, type_checking=False, **table_types):
         """Create a new manager with a db connection."""
-        self.tables = {}
+        # if you initialize two instances with different table types, each will use its own
+        self.table_types = self.table_types.copy()
+        self.tables: Dict[Type["Table"], "Table"] = {}
         self.db = db
 
         self._create_if_needed()
 
         self.table_types.update(table_types)
 
+        if module:
+            self._init_module(module, self.table_types)
+
         for name, table_type in self.table_types.items():
             # allow user to specify the table name this way instead
             if not hasattr(table_type, "table_name"):
                 table_type.table_name = name
+            if getattr(table_type, "_type_check", None) is None:
+                table_type._type_check = type_checking
             table_type(self)
 
     def get_table_by_name(self, table_name):
+        """Get table object by table name."""
         return self[self.table_types[table_name]]
 
     def __getitem__(self, table_type: Type[T]) -> T:
+        """Get table object by table type."""
         return self.tables[table_type]
 
     def __setitem__(self, table_type: Type[T], table: T):
+        """Set the table object associated with the table type."""
         assert table_type.table_name == table.table_name
         self.table_types[table.table_name] = table_type
         self._validate_table(table.table_name, table_type)
         self.tables[table_type] = table
 
     def set_table(self, table: Table):
+        """Set the table object associated with teh table type"""
         self[type(table)] = table
 
     def load_dict(self, data_set: Dict[str, Iterable[Dict[str, Any]]]):
@@ -160,12 +170,16 @@ class Omen(abc.ABC):
         except (ImportError, SyntaxError):
             generated = CodeGen.generate_from_class(cls)
 
-        for name in generated.__all__:
-            table_type = getattr(generated, name)
-            if name not in cls.table_types:
-                cls.table_types[name] = table_type
+        cls._init_module(generated, cls.table_types)
 
         return generated
+
+    @classmethod
+    def _init_module(cls, module, table_types):
+        for name in getattr(module, "__all__", dir(module)):
+            table_type = getattr(module, name)
+            if isinstance(table_type, type) and issubclass(table_type, Table):
+                table_types[table_type.table_name] = table_type
 
     @staticmethod
     def __multi_query(db, sql):
@@ -178,6 +192,7 @@ class Omen(abc.ABC):
             db.query(q)
 
     def _create_if_needed(self):
+        # TODO: this should be removed, not good behavior
         mod1 = self.db.model()
         mod2 = self.model
         mod1.pop("_omen", None)

@@ -151,6 +151,7 @@ def test_m2m_add():
     # add/remove obj
     grp1.peeps.add(peep1)
     assert grp1.peeps.get(peep1.id)
+    assert peep1.id in grp1.peeps
     grp1.peeps.remove(peep1)
     assert grp1.peeps.get(peep1.id) is None
 
@@ -187,3 +188,30 @@ def test_m2m_subsorts():
     srt = sorted(grp1.peeps)
 
     assert srt == expect
+
+
+    assert len(grp1.peeps) == 4
+    assert grp1.peeps.count() == 4
+
+@pytest.mark.parametrize("who_adds", [Group, Peep])
+def test_m2m_unbound(who_adds):
+    db = SqliteDb(":memory:")
+    mgr = Harbinger(db, groups=Groups, peeps=Peeps, group_peeps=GroupPeeps)
+    mgr.groups = Groups(mgr)
+    mgr.peeps = mgr[Peeps]
+    grp1 = Group(id=1, data="g1")
+    peep1 = Peep(id=2, data="p1")
+    grp1.peeps.add(peep1, role="role")
+
+    assert peep1 in grp1.peeps
+    assert peep1.id in grp1.peeps
+
+    if who_adds is Group:
+        mgr.groups.add(grp1)
+    else:
+        mgr.peeps.add(peep1)
+
+    assert peep1.id in mgr.peeps
+    assert peep1.id in grp1.peeps
+    assert peep1 in mgr.peeps
+    assert peep1 in grp1.peeps

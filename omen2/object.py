@@ -1,9 +1,11 @@
+"""Omen2 object and associated classes."""
+
 # pylint: disable=protected-access
 
 import logging
 import threading
 from threading import RLock
-from typing import Type, TYPE_CHECKING, Optional, Tuple, Iterable, Dict, Any
+from typing import Type, TYPE_CHECKING, Optional, Tuple, Iterable, Dict, Any, Union
 
 from dataclasses import dataclass
 from contextlib import contextmanager
@@ -20,6 +22,8 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class ObjMeta:
+    """Object private metadata containing the bound table, a lock, and other flags."""
+
     lock = RLock()
     locked = False
     new = True
@@ -29,16 +33,21 @@ class ObjMeta:
     suppress_set_changes = False
     suppress_get_changes = False
     changes: Dict[str, Any] = None
+    in_sync = False
 
 
 VERY_LARGE_LOCK_TIMEOUT = 120
 
 # noinspection PyCallingNonCallable,PyProtectedMember
 class ObjBase:
+    """Object base class, from which all objects are derived."""
+
     # objects have 2 non-private attributes that can be overridden
     _cascade = True
+    _type_check = None  # whether annotated types are checked in python
     _pk: Tuple[str, ...] = ()  # list of field names in the db used as the primary key
     _table_type: Type["Table"]  # class derived from Table
+    _sync_on_getattr = False  # maybe don't use this feature, it's an "ipc hack"
 
     # objects should only have 1 variable in __dict__
     __meta: ObjMeta = None
@@ -150,6 +159,7 @@ class ObjBase:
     def _table(self, val):
         self.__meta.table = val
 
+    @property
     def _manager(self):
         return self.__meta.table.manager
 
@@ -226,20 +236,90 @@ class ObjBase:
         ):
             return self.__meta.changes.get(k, super().__getattribute__(k))
 
+        if (
+            self._sync_on_getattr
+            and self._is_bound
+            and not self.__meta.locked
+            and not self.__meta.in_sync
+        ):
+            self.__meta.in_sync = True
+            try:
+                res = self._table.db_select(self._to_pk())[0]
+                if k in res:
+                    v = res[k]
+                    self.__dict__[k] = v
+                    return v
+            finally:
+                self.__meta.in_sync = False
+
         return super().__getattribute__(k)
+
+    @classmethod
+    def __get_type(cls, k) -> Type:  # pylint: disable=unused-private-member
+        if k not in cls.__annotations__:
+            typ = None
+            for c in cls.mro():
+                ann = getattr(c, "__annotations__", {})
+                if k in ann:
+                    typ = ann.get(k, None)
+            # cache result
+            cls.__annotations__[k] = typ
+            return typ
+        return cls.__annotations__[k]
+
+    @staticmethod
+    def __accept_instance(v, typ):  # pylint: disable=unused-private-member
+        if typ is Any:
+            return True
+        if type(v) is int and issubclass(typ, float):
+            return True
+        try:
+            return isinstance(v, typ)
+        except TypeError:
+            # not checking types i don't know how to handle
+            return True
+
+    @classmethod
+    def __assert_instance(cls, k, v, typ):
+        if getattr(typ, "__origin__", None) is Union:
+            for sub in typ.__args__:
+                if cls.__accept_instance(v, sub):
+                    return
+        elif cls.__accept_instance(v, typ):
+            return
+        raise TypeError("%s is type %s" % (k, typ))
+
+    def _checkattr(self, k, v):
+        """Override this if you want to change how annotation checking is done.
+
+        This only does very basic assertions, and will not check complex types.
+        """
+        if not hasattr(self, k):
+            raise AttributeError("Attribute %s not defined" % k)
+        self._checktype(k, v)
+
+    def _checktype(self, k, v):
+        """Check if type of value is allowed."""
+        if self._type_check:
+            typ = self.__get_type(k)
+            if typ:
+                self.__assert_instance(k, v, typ)
 
     def __setattr__(self, k, v):
         if k[0] == "_":
             super().__setattr__(k, v)
             return
 
+        if self.__meta:
+            self._checkattr(k, v)
+        else:
+            self._checktype(k, v)
+
         if self.__meta and not self.__meta.suppress_set_changes:
             if self.__meta.table and not self.__meta.locked:
                 raise OmenUseWithError("use with: protocol for bound objects")
             if self.__meta.table and self.__meta.lock_id != threading.get_ident():
                 raise OmenUseWithError("use with: protocol for bound objects")
-            if not hasattr(self, k):
-                raise AttributeError("Attribute %s not defined" % k)
 
         if self._is_bound and not self.__meta.suppress_set_changes:
             self.__meta.changes[k] = v
@@ -280,11 +360,15 @@ class ObjBase:
         obj.__dict__ = tmpobj.__dict__  # swap in new dict (atomic)
 
     def _force_apply(self, changes):
+        # this happens when the underlying database changes
         # these attribute sets do not go into the changeset
         # but setters still get triggered normally
-        with self._suppress_set_changes():
-            for k, v in changes.items():
-                setattr(self, k, v)
+        # wait for everyone else to be done writing
+        with self.__meta.lock:
+            with self._suppress_set_changes():
+                # sneak attrs in
+                for k, v in changes.items():
+                    setattr(self, k, v)
 
     def _commit(self):
         """Apply all pending changes to the object, and to the db."""
@@ -323,13 +407,13 @@ class ObjBase:
         """
         cascade = self._get_related() if self._cascade else {}
 
-        if self.__meta.table:
-            table = self.__meta.table
-            table._remove(self)
-
         for rel, objs in cascade.items():
             for obj in objs:
                 rel.remove(obj)
+
+        if self.__meta.table:
+            table = self.__meta.table
+            table._remove(self)
 
     def _save(self, keys: Iterable[str]):
         """Save myself to my table."""
@@ -350,6 +434,10 @@ class ObjBase:
             if not self.__meta.lock.acquire(timeout=VERY_LARGE_LOCK_TIMEOUT):
                 log.critical("deadlock prevented", stack_info=True)
                 raise OmenLockingError
+            if self.__meta.locked:
+                # nested with blocks could work, but they are an anti-pattern
+                self.__meta.lock.release()
+                raise OmenLockingError("nested with blocks not supported")
             self.__meta.locked = True
             self.__meta.changes = {}
             self.__meta.lock_id = threading.get_ident()

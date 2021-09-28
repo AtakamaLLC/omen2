@@ -1,19 +1,20 @@
 import base64
+
 import gc
 import logging as log
 import time
 from contextlib import suppress
 from multiprocessing.pool import ThreadPool
 from unittest.mock import patch
+from types import ModuleType
 
-import notanorm.errors
 import pytest
 from notanorm import SqliteDb
 from notanorm.errors import IntegrityError
 
-from omen2 import Omen, ObjBase, Relation
+from omen2 import Omen, ObjBase, Relation, ObjCache
 from omen2.object import CustomType
-from omen2.table import ObjCache, Table
+from omen2.table import Table
 from omen2.errors import (
     OmenNoPkError,
     OmenKeyError,
@@ -22,56 +23,11 @@ from omen2.errors import (
     OmenRollbackError,
     OmenLockingError,
 )
-from tests.schema import MyOmen
-
-MyOmen.codegen()
+from tests.schema import MyOmen, Cars, Car, InlineBasic, CarDriver, CarDrivers
 
 import tests.schema_gen as gen_objs
 
 # every table has a row_type, you can derive from it
-
-
-class CarDriver(gen_objs.car_drivers_row):
-    def __init__(self, **kws):
-        self.drivers = gen_objs.drivers_relation(
-            self, where={"id": lambda: self.driverid}, cascade=False
-        )
-        super().__init__(**kws)
-
-
-class CarDrivers(gen_objs.car_drivers[CarDriver]):
-    row_type = CarDriver
-
-
-class Car(gen_objs.cars_row):
-    def __init__(self, color="black", **kws):
-        self.not_saved_to_db = "some thing"
-        self.doors = gen_objs.doors_relation(
-            self, kws.pop("doors", None), where={"carid": lambda: self.id}, cascade=True
-        )
-        self.car_drivers = gen_objs.car_drivers_relation(
-            self, where={"carid": lambda: self.id}, cascade=True
-        )
-        super().__init__(color=color, **kws)
-
-    def __create__(self):
-        # called when a new, empty car is created, but not when one is loaded from a row
-        # defaults from the db should be preloaded
-        assert self.gas_level == 1.0
-
-        # but you can add your own
-        self.color = "default black"
-
-    @property
-    def gas_pct(self):
-        # read only props are fine
-        return self.gas_level * 100
-
-
-# every db table has a type, you can derive from it
-class Cars(gen_objs.cars[Car]):
-    # redefine the row_type used
-    row_type = Car
 
 
 def test_readme(tmp_path):
@@ -243,6 +199,19 @@ def test_update_only():
     assert db.select_one("cars", id=4).color == "black"
 
 
+def test_nested_with():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car = mgr.cars.add(Car(id=4, gas_level=2))
+    with car:
+        car.gas_level = 3
+        with pytest.raises(OmenLockingError):
+            with car:
+                car.color = "blx"
+    assert db.select_one("cars", id=4).gas_level == 3
+
+
 def test_nopk():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db, cars=Cars)
@@ -265,6 +234,8 @@ def test_need_with():
     car = mgr.cars.add(Car(gas_level=2))
     with pytest.raises(OmenUseWithError):
         car.doors = "green"
+        assert car._manager is mgr
+    assert mgr.cars.manager is mgr
 
 
 def test_shortcut_syntax():
@@ -483,15 +454,10 @@ def test_any_type():
     assert not mgr[whatever].select_one(any="31")
     assert not mgr[whatever].select_one(any=b"str")
 
-
-class InlineBasic(ObjBase):
-    _pk = ("id",)
-
-    # noinspection PyShadowingBuiltins
-    def __init__(self, *, id=None, data=None, **kws):
-        self.id = id
-        self.data = data
-        super().__init__(**kws)
+    w = mgr[whatever].select_one(any=31)
+    with w:
+        w.any = "change"
+    assert mgr[whatever].select_one(any="change")
 
 
 def test_inline_omen_no_codegen():
@@ -533,6 +499,28 @@ def test_inline_omen_no_codegen():
 
     dumped = mgr.dump_dict()
     assert dumped == data_set
+
+
+def test_inline_omen_from_module():
+    # noinspection PyAbstractClass
+    class Harbinger(Omen):
+        @classmethod
+        def schema(cls, version):
+            return "create table basic (id integer primary key, data integer)"
+
+    db = SqliteDb(":memory:")
+
+    class Basic(InlineBasic):
+        pass
+
+    class Basics(Table):
+        table_name = "basic"
+        row_type = Basic
+
+    module = ModuleType("<inline>")
+    module.Basics = Basics
+    mgr = Harbinger(db, module)
+    mgr[Basics].add(Basic(id=1))
 
 
 def test_custom_data_type():
@@ -777,18 +765,34 @@ def test_reload_from_disk():
     assert car.color == "blue"
 
 
-def test_update_to_null():
+def test_other_attrs():
+    # noinspection PyAbstractClass
+    class Harbinger(Omen):
+        @classmethod
+        def schema(cls, version):
+            return "create table basic (id integer primary key, data text)"
+
     db = SqliteDb(":memory:")
-    mgr = MyOmen(db)
-    mgr.cars = Cars(mgr)
-    car = mgr.cars.add(Car(gas_level=0, color="green"))
-    with car:
-        car.gas_level = None
-    assert db.select_one("cars", id=1).gas_level is None
-    with pytest.raises(notanorm.errors.IntegrityError):
-        with car:
-            car.color = None
-    assert car.color == "green"
+
+    class Basic(InlineBasic):
+        def __init__(self, *, id, data, **kws):
+            self.custom_thing = 44
+            super().__init__(id=id, data=data, **kws)
+
+    # tests bootstrapping
+    class Basics(Table[Basic]):
+        pass
+
+    mgr = Harbinger(db, basic=Basics)
+    mgr.basic = Basics(mgr)
+    mgr.basic.new(id=1, data="someval")
+    bas = mgr.basic.select_one(id=1)
+    assert bas.custom_thing == 44
+    with pytest.raises(OmenUseWithError):
+        bas.custom_thing = 3
+
+    assert mgr.basic.select_one(custom_thing=44)
+    assert not mgr.basic.select_one(custom_thing=43)
 
 
 def test_disable_allow_auto():
@@ -853,3 +857,44 @@ def test_multi_pk_issues():
     b.subs.add(Sub(sub="what"))
 
     assert db.select_one("subs", id1=4, id2=5).sub == "what"
+
+
+def test_unbound_add():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+    car = Car(id=44, gas_level=0, color="green")
+    door = gen_objs.doors_row(type="a")
+    car.doors.add(door)
+    assert door.carid == car.id
+    assert door.carid
+    assert door in car.doors
+    assert car.doors.select_one(type="a")
+    mgr.cars.add(car)
+    assert db.select_one("doors", carid=car.id, type="a")
+
+
+def test_underlying_delete():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+    car = Car(id=44, gas_level=0, color="green")
+    mgr.cars.add(car)
+    assert db.select_one("cars", id=car.id)
+    db.delete("cars", id=car.id)
+    car2 = Car(id=44, gas_level=0, color="green")
+    mgr.cars.add(car2)
+    assert car2 is not car
+    assert mgr.cars.get(id=44) is car2
+
+
+def test_sync_on_getattr():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+    car = Car(id=44, gas_level=0, color="green")
+    mgr.cars.add(car)
+    car._sync_on_getattr = True
+    assert car.color == "green"
+    db.update("cars", id=car.id, color="blue")
+    assert car.color == "blue"

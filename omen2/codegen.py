@@ -1,3 +1,4 @@
+"""Omen2: generate python code from a database schema."""
 import keyword
 import os
 import sys
@@ -7,7 +8,7 @@ import logging as log
 
 from notanorm import DbTable, DbCol
 
-from omen2.types import default_type
+from omen2.types import default_type, any_type
 
 
 class CodeGen:
@@ -62,6 +63,8 @@ class CodeGen:
         Example:
 
             class cars_row(ObjBase):
+                id: int
+                color: str
                 _pk = ("id", )
                 def __init__(self, id, color: str = "green"):
                     self.id = id
@@ -78,6 +81,15 @@ class CodeGen:
         for index in dbtab.indexes:
             if index.primary and index.fields:
                 keys = index.fields
+
+        for col in dbtab.columns:
+            pytype = default_type(col.typ)
+            typename = pytype.__name__
+            if pytype is any_type:
+                typename = "Any"
+            if not col.notnull:
+                typename = "Optional[%s]" % typename
+            print("    %s: %s" % (col.name, typename), file=out)
 
         # _pk is a class-variable
         print("    _pk = ('" + "', '".join(keys) + "', )", file=out)
@@ -169,7 +181,7 @@ class CodeGen:
         """Generate import statements."""
         print(
             "from omen2 import ObjBase, Table, Relation, any_type\n"
-            "from typing import TypeVar\n",
+            "from typing import TypeVar, Optional, Any\n",
             file=out,
         )
 
@@ -223,7 +235,7 @@ class CodeGen:
 
         out_path = cg.output_path()
         tmp_path = out_path + ".tmp"
-        with open(tmp_path, "w") as outf:
+        with open(tmp_path, "w", encoding="utf8") as outf:
             cg.gen_monolith(outf)
 
         os.replace(tmp_path, out_path)
@@ -232,6 +244,7 @@ class CodeGen:
 
 
 def main():
+    """Command line codegen: given a moddule path, generate code."""
     CodeGen.generate_from_path(sys.argv[-1])
 
 
