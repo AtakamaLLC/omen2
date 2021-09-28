@@ -8,7 +8,7 @@ omen2 allows the user to:
  - serialize created objects to the db
  - query the db and return objects, not rows
  - query for related objects
- - access/lock/update signleton objects across multiple threads
+ - access/lock/update singleton objects across multiple threads
  - roll back changes on exceptions
  - create objects not-bound to the db, and later, bind them
  - cache objects in use, flexible cache-control
