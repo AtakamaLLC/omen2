@@ -32,4 +32,4 @@ class OmenLockingError(Exception):
 
 
 class IntegrityError(OmenError, notanorm.errors.IntegrityError):
-    """Attempt to add dup private key."""
+    """Attempt to add dup primary key."""
