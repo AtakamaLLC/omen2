@@ -1,6 +1,7 @@
 pytest
 coverage>=5
 pytest-cov
+pytest-xdist
 pylint
 notanorm
 black
