@@ -235,7 +235,12 @@ class ObjBase:
             and not self.__meta.suppress_get_changes
         ):
             return self.__meta.changes.get(k, super().__getattribute__(k))
+        
+        self._syncattr(k)
 
+        return super().__getattribute__(k)
+
+    def _syncattr(self, k):
         if (
             self._sync_on_getattr
             and self._is_bound
@@ -251,8 +256,6 @@ class ObjBase:
                     return v
             finally:
                 self.__meta.in_sync = False
-
-        return super().__getattribute__(k)
 
     @classmethod
     def __get_type(cls, k) -> Type:  # pylint: disable=unused-private-member
