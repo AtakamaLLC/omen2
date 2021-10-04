@@ -252,7 +252,7 @@ class ObjBase:
                 res = self._table.db_select(self._to_pk())[0]
                 if k in res:
                     v = res[k]
-                    self.__dict__[k] = v
+                    super().__setattr__(k, v)
                     return v
             finally:
                 self.__meta.in_sync = False
