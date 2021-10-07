@@ -235,7 +235,7 @@ class ObjBase:
             and not self.__meta.suppress_get_changes
         ):
             return self.__meta.changes.get(k, super().__getattribute__(k))
-        
+
         self._syncattr(k)
 
         return super().__getattribute__(k)

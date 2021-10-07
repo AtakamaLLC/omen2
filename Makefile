@@ -10,6 +10,9 @@ lint:
 	python -m pylint omen2
 	black omen2
 
+black:
+	black omen2
+
 test:
 	pytest -n=3 --cov omen2 -v tests
 
