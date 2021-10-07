@@ -253,7 +253,6 @@ class ObjBase:
                 if k in res:
                     v = res[k]
                     super().__setattr__(k, v)
-                    return v
             finally:
                 self.__meta.in_sync = False
 
