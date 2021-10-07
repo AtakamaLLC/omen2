@@ -31,5 +31,4 @@ class OmenLockingError(Exception):
     """Deadlock detection.  If this is thrown, the system should drop out/die/fail hard."""
 
 
-class IntegrityError(OmenError, notanorm.errors.IntegrityError):
-    """Attempt to add dup primary key."""
+IntegrityError = notanorm.errors.IntegrityError
