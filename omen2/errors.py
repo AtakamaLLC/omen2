@@ -31,4 +31,5 @@ class OmenLockingError(Exception):
     """Deadlock detection.  If this is thrown, the system should drop out/die/fail hard."""
 
 
+# has to be the same, or we have to track down every place where they *might not be*
 IntegrityError = notanorm.errors.IntegrityError
