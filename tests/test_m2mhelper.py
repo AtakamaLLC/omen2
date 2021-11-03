@@ -216,3 +216,21 @@ def test_m2m_unbound(who_adds):
     assert peep1.id in grp1.peeps
     assert peep1 in mgr.peeps
     assert peep1 in grp1.peeps
+
+
+def test_m2m_id_change():
+    db = SqliteDb(":memory:")
+    mgr = Harbinger(db, groups=Groups, peeps=Peeps)
+    mgr.groups = Groups(mgr)
+    mgr.peeps = mgr[Peeps]
+    grp1 = mgr.groups.new(id=1, data="g1")
+    peep1 = mgr.peeps.new(id=2, data="p1")
+    grp1.peeps.add(peep1.id, role="role")
+    with grp1:
+        grp1.id = 4
+    assert grp1.peeps.get(peep1.id)
+    assert mgr.db.select_one("groups").data == "g1"
+    assert mgr.db.select_one("group_peeps", groupid=4, peepid=2)
+    assert mgr.db.select_one("group_peeps")
+    assert mgr.db.select_one("peeps")
+    assert mgr.groups.select_one(id=4).peeps.select_one(id=2)

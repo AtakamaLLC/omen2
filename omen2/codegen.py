@@ -87,9 +87,7 @@ class CodeGen:
         for col in dbtab.columns:
             pytype = default_type(col.typ)
             typename = pytype.__name__
-            if pytype is any_type:
-                typename = "Any"
-            if not col.notnull:
+            if not col.notnull and pytype is not any_type:
                 typename = "Optional[%s]" % typename
             print("    %s: %s" % (col.name, typename), file=out)
 
@@ -109,9 +107,8 @@ class CodeGen:
                 # derive default value from the db default value
                 if col.default:
                     try:
-                        defval = pytype(col.default)
                         # check valid python
-                        eval(str(defval))  # pylint: disable=eval-used
+                        defval = pytype(str(col.default))  # pylint: disable=eval-used
                     except (ValueError, NameError):
                         # no way to generate a default value for some stuff
                         defval = None
@@ -123,6 +120,8 @@ class CodeGen:
                         )
                 else:
                     defval = None
+                # double check
+                eval(str(defval))  # pylint: disable=eval-used
                 # finishing one parameter: = "green"
                 print(" = " + str(defval), file=out, end="")
             # comma between params

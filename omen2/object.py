@@ -236,6 +236,11 @@ class ObjBase:
         ):
             return self.__meta.changes.get(k, super().__getattribute__(k))
 
+        self._syncattr(k)
+
+        return super().__getattribute__(k)
+
+    def _syncattr(self, k):
         if (
             self._sync_on_getattr
             and self._is_bound
@@ -247,12 +252,9 @@ class ObjBase:
                 res = self._table.db_select(self._to_pk())[0]
                 if k in res:
                     v = res[k]
-                    self.__dict__[k] = v
-                    return v
+                    super().__setattr__(k, v)
             finally:
                 self.__meta.in_sync = False
-
-        return super().__getattribute__(k)
 
     @classmethod
     def __get_type(cls, k) -> Type:  # pylint: disable=unused-private-member
