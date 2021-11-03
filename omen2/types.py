@@ -7,13 +7,14 @@ from notanorm import DbType
 def any_type(arg):
     """Pass-through converter."""
     # return value as python interpreted
-    return eval(arg)
+    return eval(arg)  # pylint: disable=eval-used
 
 
 any_type.__name__ = "Any"
 
 
 def bool_type(arg):
+    """Convert sql string to bool, this function must have the __name__ 'bool'"""
     arg = arg.lower()
     if arg == "true":
         return True
@@ -27,6 +28,7 @@ bool_type.__name__ = "bool"
 
 
 def string_type(arg):
+    """Convert sql string to str, this function must have the __name__ 'str'"""
     assert arg[0] == "'"
     # return with quotes
     return arg

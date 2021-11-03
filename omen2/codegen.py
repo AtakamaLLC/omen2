@@ -121,7 +121,7 @@ class CodeGen:
                 else:
                     defval = None
                 # double check
-                eval(str(defval))  # pylint: disable=eval=used
+                eval(str(defval))  # pylint: disable=eval-used
                 # finishing one parameter: = "green"
                 print(" = " + str(defval), file=out, end="")
             # comma between params
