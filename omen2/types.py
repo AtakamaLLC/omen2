@@ -36,7 +36,10 @@ string_type.__name__ = "str"
 
 
 def default_type(typ: DbType) -> Callable:  # pylint: disable=too-many-return-statements
-    """Returns a callable that converts a database default value string to the correct python type."""
+    """Returns a callable that converts a database default value string to the correct python type.
+
+    Callable name must be the typename to be used.
+    """
     if typ == DbType.ANY:
         return any_type
     if typ == DbType.INTEGER:

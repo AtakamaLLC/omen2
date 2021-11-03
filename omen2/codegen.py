@@ -87,8 +87,6 @@ class CodeGen:
         for col in dbtab.columns:
             pytype = default_type(col.typ)
             typename = pytype.__name__
-            if pytype is any_type:
-                typename = "Any"
             if not col.notnull and pytype is not any_type:
                 typename = "Optional[%s]" % typename
             print("    %s: %s" % (col.name, typename), file=out)
@@ -122,6 +120,8 @@ class CodeGen:
                         )
                 else:
                     defval = None
+                # double check
+                eval(str(defval))  # pylint: disable=eval=used
                 # finishing one parameter: = "green"
                 print(" = " + str(defval), file=out, end="")
             # comma between params
