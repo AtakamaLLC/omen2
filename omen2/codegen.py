@@ -110,8 +110,7 @@ class CodeGen:
                 if col.default:
                     try:
                         # check valid python
-                        pytype(eval(str(col.default)))  # pylint: disable=eval-used
-                        defval = str(col.default)
+                        defval = pytype(str(col.default))  # pylint: disable=eval-used
                     except (ValueError, NameError):
                         # no way to generate a default value for some stuff
                         defval = None
