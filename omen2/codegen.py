@@ -89,7 +89,7 @@ class CodeGen:
             typename = pytype.__name__
             if pytype is any_type:
                 typename = "Any"
-            if not col.notnull:
+            if not col.notnull and pytype is not any_type:
                 typename = "Optional[%s]" % typename
             print("    %s: %s" % (col.name, typename), file=out)
 

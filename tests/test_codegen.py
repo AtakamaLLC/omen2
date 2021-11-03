@@ -21,6 +21,7 @@ def test_codegen(tmp_path):
                     boolt boolean default True,
                     boolf boolean default False,
                     booly boolean,
+                    anyold default 4,
                     bad_default not null default (strftime('%s','now')) ,
                     class text
                 );
@@ -35,6 +36,7 @@ def test_codegen(tmp_path):
     assert zap.boolt == True
     assert zap.boolf == False
     assert zap.booly == None
+    assert zap.anyold == 4
     assert zap.__annotations__["bad_default"] is Any
     assert zap.__annotations__["floaty"] is Optional[float]
     assert zap.__annotations__["id"] is Optional[int]
@@ -42,6 +44,7 @@ def test_codegen(tmp_path):
     assert zap.__annotations__["booly"] is Optional[bool]
     assert zap.__annotations__["boolt"] is Optional[bool]
     assert zap.__annotations__["boolf"] is Optional[bool]
+    assert zap.__annotations__["anyold"] is Any
 
 
 def test_codegen_pathed(tmp_path):
