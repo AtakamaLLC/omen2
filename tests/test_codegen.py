@@ -17,6 +17,7 @@ def test_codegen(tmp_path):
                     id integer primary key,
                     nonnull text not null,
                     defstr text not null default 'default txt',
+                    defstr2 text not null default "default txt2",
                     floaty double default 1.0,
                     boolt boolean default TRuE,
                     boolf boolean default FAlSe,
@@ -34,6 +35,7 @@ def test_codegen(tmp_path):
     assert zap.floaty == 1.0
     assert zap.class_ is None
     assert zap.defstr == "default txt"
+    assert zap.defstr2 == "default txt2"
     assert zap.boolt == True
     assert zap.boolf == False
     assert zap.booly == None
