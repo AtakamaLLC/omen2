@@ -18,6 +18,9 @@ def test_codegen(tmp_path):
                     nonnull text not null,
                     defstr text not null default 'default txt',
                     floaty double default 1.0,
+                    boolt boolean default True,
+                    boolf boolean default False,
+                    booly boolean,
                     bad_default not null default (strftime('%s','now')) ,
                     class text
                 );
@@ -29,10 +32,16 @@ def test_codegen(tmp_path):
     assert zap.floaty == 1.0
     assert zap.class_ is None
     assert zap.defstr == "default txt"
+    assert zap.boolt == True
+    assert zap.boolf == False
+    assert zap.booly == None
     assert zap.__annotations__["bad_default"] is Any
     assert zap.__annotations__["floaty"] is Optional[float]
     assert zap.__annotations__["id"] is Optional[int]
     assert zap.__annotations__["nonnull"] is str
+    assert zap.__annotations__["booly"] is Optional[bool]
+    assert zap.__annotations__["boolt"] is Optional[bool]
+    assert zap.__annotations__["boolf"] is Optional[bool]
 
 
 def test_codegen_pathed(tmp_path):
@@ -50,5 +59,6 @@ def test_codegen_main():
     sys.argv = ["progname", "tests.schema.MyOmen"]
     main()
     import tests.schema_gen
+
     assert tests.schema_gen.cars
     os.unlink(tests.schema_gen.__file__)

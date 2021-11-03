@@ -109,9 +109,9 @@ class CodeGen:
                 # derive default value from the db default value
                 if col.default:
                     try:
-                        defval = pytype(col.default)
                         # check valid python
-                        eval(str(defval))  # pylint: disable=eval-used
+                        pytype(eval(str(col.default)))  # pylint: disable=eval-used
+                        defval = str(col.default)
                     except (ValueError, NameError):
                         # no way to generate a default value for some stuff
                         defval = None
