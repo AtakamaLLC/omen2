@@ -174,7 +174,9 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
                 else:
                     resolved[k] = getattr(obj, v)
 
-    def add(self, obj_or_id: T2 = None, **kws) -> Union[T2, M2MMixObj[T1, T2]]:
+    def add(
+        self, obj_or_id: T2 = None, **kws
+    ) -> Union[T2, M2MMixObj[T1, T2]]:  # pylint: disable=arguments-renamed
         """Add a member of the m2m list, with extra kws for the m2m row."""
 
         if obj_or_id is None or not isinstance(obj_or_id, (M2MMixObj, ObjBase)):
@@ -237,7 +239,9 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
             kws[self.row_type_2._pk[0]] = _id
         return super().__call__(**kws)
 
-    def remove(self, obj_or_id: "ObjBase" = None, **kws):
+    def remove(
+        self, obj_or_id: "ObjBase" = None, **kws
+    ):  # pylint: disable=arguments-renamed
         """Remove a specific entry by primary key or raise an error."""
         if not isinstance(obj_or_id, (ObjBase, M2MMixObj)) or not obj_or_id:
             # we have to call "get" to get the obj

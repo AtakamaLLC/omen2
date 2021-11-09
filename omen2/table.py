@@ -27,7 +27,7 @@ class Table(Selectable[T]):
     field_names: Set[str]
     allow_auto: bool = None
 
-    def __init_subclass__(cls, **_kws):
+    def __init_subclass__(cls, *_a, **_kws):
         if hasattr(cls, "row_type"):
             cls.row_type._table_type = cls
 
