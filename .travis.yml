@@ -1,7 +1,4 @@
 language: python
-python:
-  - "3.6"
-  - "3.9"
 
 cache: 
   pip: True
@@ -14,6 +11,9 @@ jobs:
       stage: test
       script:
         - ./ci-test.sh
+      python:
+        - "3.6"
+        - "3.9"
 
 after_success:
     - ./ci-cov.sh
