@@ -10,12 +10,8 @@ matrix:
   - python: 3.6
   - python: 3.9
 
-jobs:
-    include:
-    - name: test
-      stage: test
-      script:
-        - ./ci-test.sh
+script:
+  - ./ci-test.sh
 
 after_success:
     - ./ci-cov.sh
