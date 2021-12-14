@@ -915,3 +915,13 @@ def test_cache_sharing():
     assert not cache.select_one(id=45)
     assert mgr.cars.select_one(id=45)
     assert cache.select_one(id=45)
+
+    db.delete("cars", id=44)
+    assert cache.get(id=44)
+    assert cache.select_one(id=44)
+    assert not mgr.cars.select_one(id=44)
+    # still cached, because select() does NOT clear deleted rows from the cache
+    assert cache.select_one(id=44)
+    # but reload() does
+    cache.reload()
+    assert not cache.select_one(id=44)
