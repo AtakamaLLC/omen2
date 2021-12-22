@@ -106,6 +106,8 @@ class Table(Selectable[T]):
         return self.db.select(self.table_name, None, where)
 
     def __select(self, where) -> Iterable[T]:
+        if not where:
+            self._cache.clear()
         db_where = {k: v for k, v in where.items() if k in self.field_names}
         attr_where = {k: v for k, v in where.items() if k not in self.field_names}
         for row in self.db_select(db_where):
@@ -158,5 +160,4 @@ class ObjCache(Selectable[T]):
 
     def reload(self):
         """Reload the objects in the cache from the db."""
-        self.table._cache.clear()
         return sum(1 for _ in self.table.select())

@@ -917,11 +917,17 @@ def test_cache_sharing():
     assert cache.select_one(id=45)
 
     db.delete("cars", id=44)
+    # still cached
     assert cache.get(id=44)
     assert cache.select_one(id=44)
+    # still cached, because select() with filter does NOT clear deleted rows from the cache
     assert not mgr.cars.select_one(id=44)
-    # still cached, because select() does NOT clear deleted rows from the cache
     assert cache.select_one(id=44)
-    # but reload() does
-    cache.reload()
+    # select() with no filter clears cache
+    assert len(list(mgr.cars.select())) == 1
     assert not cache.select_one(id=44)
+    # reload() clears cache
+    assert cache.get(id=45)
+    db.delete("cars", id=45)
+    cache.reload()
+    assert not cache.select_one(id=45)
