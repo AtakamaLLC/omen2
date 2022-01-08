@@ -106,13 +106,14 @@ class Table(Selectable[T]):
         return self.db.select(self.table_name, None, where)
 
     def __select(self, where) -> Iterable[T]:
-        if not where:
-            self._cache.clear()
+        db_pks = set()
         db_where = {k: v for k, v in where.items() if k in self.field_names}
         attr_where = {k: v for k, v in where.items() if k not in self.field_names}
         for row in self.db_select(db_where):
             obj = self.row_type._from_db_not_new(row._asdict())
-            cached: "ObjBase" = self._cache.get(obj._to_pk_tuple())
+            pk = obj._to_pk_tuple()
+            cached: "ObjBase" = self._cache.get(pk)
+            db_pks.add(pk)
             if cached:
                 update = obj._to_db()
                 already = cached._to_db()
@@ -126,13 +127,20 @@ class Table(Selectable[T]):
             if all(getattr(obj, k) == v for k, v in attr_where.items()):
                 yield obj
 
+        if not where:
+            # remove cached items that are no longer in the db
+            remove_from_cache: set = {pk for pk in self._cache.keys() if pk not in db_pks}
+            for pop_me in remove_from_cache:
+                log.debug("removing %s from cache", pop_me)
+                self._cache.pop(pop_me)
+
     def select(self, _where={}, **kws) -> Iterable[T]:
         """Read objects of specified class."""
         kws.update(_where)
         yield from self.__select(kws)
 
     def count(self, _where={}, **kws) -> int:
-        """Return count of objs matchig where clause."""
+        """Return count of objs matching where clause."""
         kws.update(_where)
         return self.db.count(self.table_name, kws)
 
