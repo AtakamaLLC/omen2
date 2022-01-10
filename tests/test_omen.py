@@ -911,21 +911,29 @@ def test_cache_sharing():
     assert car in mgr.cars
     assert car in cache
     db.insert("cars", id=45, gas_level=45, color="blue")
+    db.insert("cars", id=46, gas_level=46, color="red")
     assert cache.get(id=44)
     assert not cache.select_one(id=45)
+    assert not cache.select_one(id=46)
     assert mgr.cars.select_one(id=45)
     assert cache.select_one(id=45)
+    assert mgr.cars.select_one(id=46)
+    assert cache.select_one(id=46)
 
     db.delete("cars", id=44)
     # still cached
     assert cache.get(id=44)
     assert cache.select_one(id=44)
-    # still cached, because select() with filter does NOT clear deleted rows from the cache
-    assert not mgr.cars.select_one(id=44)
+    # still cached, select with a different filter does not clear cache
+    assert mgr.cars.select_one(id=45)
     assert cache.select_one(id=44)
-    # select() with no filter clears cache
-    assert len(list(mgr.cars.select())) == 1
+    # cache updated by select with matching filter
+    assert not mgr.cars.select_one(id=44)
     assert not cache.select_one(id=44)
+    # select() with no filter clears cache
+    db.delete("cars", id=46)
+    assert len(list(mgr.cars.select())) == 1
+    assert not cache.select_one(id=46)
     # reload() clears cache
     assert cache.get(id=45)
     db.delete("cars", id=45)
@@ -942,12 +950,12 @@ def test_cache_sharing_threaded():
     assert mgr.cars.select_one(id=12)
     assert cache.select_one(id=12)
 
-    # all threads update gas_level of cached car, only the first thread reload the cache
+    # all threads update gas_level of cached car, only the first thread reloads the cache
     def update_stuff(_i):
         if _i == 0:
             cache.reload()
 
-        # if the cache was cleared in in another thread, this returns None
+        # if the cache was cleared in in another thread, this returns None (behavior we want to avoid)
         c = cache.select_one(id=12)
         assert c
         with c:

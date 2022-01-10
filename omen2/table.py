@@ -127,12 +127,14 @@ class Table(Selectable[T]):
             if all(getattr(obj, k) == v for k, v in attr_where.items()):
                 yield obj
 
-        if not where:
-            # remove cached items that are no longer in the db
-            remove_from_cache: set = {pk for pk in self._cache.keys() if pk not in db_pks}
-            for pop_me in remove_from_cache:
-                log.debug("removing %s from cache", pop_me)
-                self._cache.pop(pop_me)
+        # remove cached items that are no longer in the db
+        remove_from_cache = set()
+        for k, v in self._cache.items():
+            if v._matches(where) and k not in db_pks:
+                remove_from_cache.add(k)
+        for pop_me in remove_from_cache:
+            log.debug("removing %s from cache", pop_me)
+            self._cache.pop(pop_me)
 
     def select(self, _where={}, **kws) -> Iterable[T]:
         """Read objects of specified class."""
