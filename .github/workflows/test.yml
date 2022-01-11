@@ -29,5 +29,4 @@ jobs:
     - name: Test
       run: |
         ./ci-test.sh
-  cov:
-    ./ci-cov.sh
+        ./ci-cov.sh
