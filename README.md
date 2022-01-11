@@ -1,7 +1,6 @@
 Simple library that makes working with classes and databases more convenient in python.
 
-`omen2` will take a set of classes, and a database, and link them together
-with migration support.
+`omen2` will take a set of classes, and a database, and link them together.
 
 omen2 allows the user to:
 
@@ -27,18 +26,13 @@ class MyOmen(Omen):
 
     @staticmethod
     def schema(version):
-        # if you want to test migration, store old versions, and return them here
-        assert version == 2
-
-        # use an omen2-compatible schema, which is a semicolon-delimited create statement
+        # use an omen2-compatible schema, which is a semicolon-delimited sqlite-compatible create statement
         return """create table cars(id integer primary key, color text not null, gas_level double default 1.0);
                   create table doors(carid integer, type text, primary key (carid, type));"""
         
-        # alternatively, return a list of type-annotated classes derived from ObjBase
+        # or, just return a list of type-annotated classes derived from ObjBase
 
-    def migrate(db, version):
-        # you should create a migration for each version
-        assert False
+        # or, don't have one at all, it's ok
 
 # you don't have to codegen, you can also just derive from omen2.ObjBase
 # but you have to match your database system to the model one way or another
@@ -69,7 +63,6 @@ class Cars(gen_objs.cars):
 
 db = SqliteDb(":memory:")
 
-# upon connection to a database, this will do migration, or creation as needed
 mgr = MyOmen(db, cars=Cars)
 
 # there's always a mapping from table class to instance
