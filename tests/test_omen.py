@@ -301,6 +301,10 @@ def test_cache():
     # until now
     assert cars.select_one(id=98)
 
+    # and we can remove items
+    assert cars.expire(id=98) == 1
+    assert cars.select_one(id=98) is None
+
 
 def test_iter_and_sort():
     db = SqliteDb(":memory:")

@@ -168,6 +168,17 @@ class ObjCache(Selectable[T]):
             if v._matches(kws):
                 yield v
 
+    def expire(self, _where={}, **kws) -> int:
+        """Remove an object from the cache"""
+        kws.update(_where)
+        to_delete = []
+        for k, v in self.table._cache.items():
+            if v._matches(kws):
+                to_delete.append(k)
+        for k in to_delete:
+            del self.table._cache[k]
+        return len(to_delete)
+
     def reload(self):
         """Reload the objects in the cache from the db."""
         return sum(1 for _ in self.table.select())
