@@ -5,6 +5,7 @@ import importlib
 import os
 import sys
 import logging as log
+from contextlib import contextmanager
 
 from notanorm import DbBase, SqliteDb, DbModel
 from typing import Any, Optional, Dict, Type, Iterable, TypeVar
@@ -205,3 +206,9 @@ class Omen(abc.ABC):
     def schema(cls, version):
         """Override this to return a schema for a given version."""
         ...
+
+    @contextmanager
+    def transaction(self):
+        for tab in self.tables:
+            with tab.transaction():
+                yield self

@@ -318,6 +318,13 @@ class ObjBase:
             self._checktype(k, v)
 
         if self.__meta and not self.__meta.suppress_set_changes:
+            if (
+                self.__meta.table
+                and self.__meta.table._in_tx()
+                and not self.__meta.locked
+            ):
+                self.__meta.table._add_object_to_tx(self)
+
             if self.__meta.table and not self.__meta.locked:
                 raise OmenUseWithError("use with: protocol for bound objects")
             if self.__meta.table and self.__meta.lock_id != threading.get_ident():
@@ -445,7 +452,7 @@ class ObjBase:
             self.__meta.lock_id = threading.get_ident()
         return self
 
-    def __exit__(self, typ, val, ex):
+    def __exit__(self, typ, ex, tb):
         """Finished with write, call commit or not, based on exception."""
         if not self.__meta or not self.__meta.locked:
             # unbound objects aren't locked, and don't need the with: protocol

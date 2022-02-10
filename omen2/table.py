@@ -1,4 +1,6 @@
 """Omen2: Table class and supporting types"""
+import contextlib
+import threading
 import weakref
 from contextlib import suppress
 from typing import Set, Dict, Iterable, TYPE_CHECKING, TypeVar
@@ -36,6 +38,7 @@ class Table(Selectable[T]):
         self.manager = mgr
         # noinspection PyTypeChecker
         self._cache: Dict[dict, "ObjBase"] = weakref.WeakValueDictionary()
+        self._tx_objs: Dict[int, Set["ObjBase"]] = {}
         mgr.set_table(self)
 
     @property
@@ -145,6 +148,38 @@ class Table(Selectable[T]):
         """Return count of objs matching where clause."""
         kws.update(_where)
         return self.db.count(self.table_name, kws)
+
+    @contextlib.contextmanager
+    def transaction(self):
+        tid = threading.get_ident()
+        self._tx_objs[tid] = set()
+        needs_rollback = set()
+        try:
+            with self.db.transaction():
+                yield self
+                # todo, have to implemnent a copy/rollback
+                for obj in self._tx_objs[tid]:
+                    obj.__exit__(None, None, None)
+                    needs_rollback.add(obj)
+        except Exception as e:
+            for obj in self._tx_objs[tid]:
+                if obj not in needs_rollback:
+                    obj.__exit__(type(e), e, None)
+            # roll back objects that were committed
+            for obj in needs_rollback:
+                self.select(**obj._to_pk())
+
+        del self._tx_objs[tid]
+
+    def _in_tx(self):
+        return threading.get_ident() in self._tx_objs
+
+    def _add_object_to_tx(self, obj):
+        assert self._in_tx()
+        objs = self._tx_objs[threading.get_ident()]
+        if obj not in objs:
+            obj.__enter__()
+            objs.add(obj)
 
 
 # noinspection PyDefaultArgument,PyProtectedMember
