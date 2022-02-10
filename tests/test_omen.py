@@ -7,6 +7,7 @@ from contextlib import suppress
 from multiprocessing.pool import ThreadPool
 from unittest.mock import patch
 from types import ModuleType
+from typing import Any
 
 import pytest
 from notanorm import SqliteDb
@@ -237,6 +238,88 @@ def test_need_with():
         car.doors = "green"
         assert car._manager is mgr
     assert mgr.cars.manager is mgr
+
+
+def test_transaction() -> None:
+    db = SqliteDb(":memory:")
+    Driver = gen_objs.drivers
+    mgr = MyOmen(db, cars=Cars, drivers=Driver)
+    cars = mgr[Cars]
+    drivers = mgr[Driver]
+    car_drivers = CarDrivers(mgr)
+
+    car1_orig = cars.add(Car(id=1, gas_level=2))
+
+    def make_changes() -> None:
+        car1 = cars(id=1)
+
+        car2 = Car(id=2, color="white", gas_level=1)
+        cars.add(car2)
+
+        with car1:
+            car1.color = "blue"
+            car1.gas_level = 7
+
+        with car2:
+            car2.gas_level=14
+
+        driver1 = drivers.new(name="bob")
+
+        car_drivers.add(CarDriver(carid=car1.id, driverid=driver1.id))
+
+        assert [cd.driverid for cd in car1.car_drivers] == [driver1.id]
+
+        log.info("cars table (omen): %s", [str(c) for c in cars.select()])
+        log.info("cars table (db): %s", list(db.select("cars")))
+        log.info("drivers table (omen): %s", [str(d) for d in drivers.select()])
+        log.info("drivers table (db): %s", list(db.select("drivers")))
+        log.info("car_drivers table (omen): %s", [str(d) for d in car_drivers.select()])
+        log.info("car_drivers table (db): %s", list(db.select("car_drivers")))
+
+    def grab_table(tbl: str) -> list[dict[str, Any]]:
+        return [dict(row) for row in db.select(tbl)]
+
+    def grab_relevant_tables() -> dict[str, list[dict[str, Any]]]:
+        return {tbl: grab_table(tbl) for tbl in ("cars", "drivers", "car_drivers")}
+
+    before = grab_relevant_tables()
+
+    class MyExc(Exception):
+        pass
+
+    # Changes are all made, but operation ultimately fails
+    with pytest.raises(MyExc):
+        with cars.manager.transaction():
+            make_changes()
+
+            # Do a rollback
+            raise MyExc
+
+    after_rollback = grab_relevant_tables()
+    assert before == after_rollback
+
+    # We should also have rolled back changes in-memory where possible
+    assert car1_orig.color == "black"
+    assert car1_orig.gas_level == 2
+
+    # This should actually commit
+    with cars.manager.transaction():
+        make_changes()
+
+    after_commit = grab_relevant_tables()
+    assert before != after_commit
+    assert car1_orig.color == "blue"
+    assert car1_orig.gas_level == 7
+
+    expected = {
+        "cars": [
+            {'id': 1, 'color': 'blue', 'gas_level': 7.0},
+            {'id': 2, 'color': 'white', 'gas_level': 14.0},
+        ],
+        "drivers": [{"id": 1, "name": "bob"}],
+        "car_drivers": [{"carid": 1, "driverid": 1}],
+    }
+    assert after_commit == expected
 
 
 def test_shortcut_syntax():

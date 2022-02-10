@@ -1,19 +1,42 @@
 """Simple object manager."""
 
 import abc
+import contextlib
 import importlib
 import os
 import sys
 import logging as log
 
 from notanorm import DbBase, SqliteDb, DbModel
-from typing import Any, Optional, Dict, Type, Iterable, TypeVar
+from typing import (
+    Any,
+    Optional,
+    Dict,
+    Type,
+    Iterable,
+    Iterator,
+    TypeVar,
+    ContextManager,
+)
 
 from .table import Table
 from .object import ObjBase
 from .codegen import CodeGen
 
 T = TypeVar("T", bound=Table)
+
+
+@contextlib.contextmanager
+def _omen_tx_guard(omen: "Omen") -> Iterator[None]:
+    try:
+        with omen.db.transaction():
+            yield
+    except BaseException:
+        # Roll back in-memory values to their on-disk state
+        for tbl in omen.tables.values():
+            for _ in tbl.select():
+                pass
+        raise
 
 
 # noinspection PyMethodMayBeStatic,PyProtectedMember
@@ -57,6 +80,10 @@ class Omen(abc.ABC):
             if getattr(table_type, "_type_check", None) is None:
                 table_type._type_check = type_checking
             table_type(self)
+
+    def transaction(self) -> ContextManager[None]:
+        """Begin a DB-wide transaction, which will roll back changes on exception."""
+        return _omen_tx_guard(self)
 
     def get_table_by_name(self, table_name):
         """Get table object by table name."""
