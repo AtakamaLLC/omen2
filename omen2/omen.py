@@ -1,6 +1,7 @@
 """Simple object manager."""
 
 import abc
+import contextlib
 import importlib
 import os
 import sys
@@ -13,6 +14,7 @@ from typing import Any, Optional, Dict, Type, Iterable, TypeVar
 from .table import Table
 from .object import ObjBase
 from .codegen import CodeGen
+from .errors import OmenRollbackError
 
 T = TypeVar("T", bound=Table)
 
@@ -209,6 +211,10 @@ class Omen(abc.ABC):
 
     @contextmanager
     def transaction(self):
-        for tab in self.tables:
-            with tab.transaction():
+        try:
+            with contextlib.ExitStack() as stack:
+                for tab in self.tables.values():
+                    stack.enter_context(tab._unsafe_transaction())
                 yield self
+        except OmenRollbackError:
+            pass

@@ -5,7 +5,7 @@ import weakref
 from contextlib import suppress
 from typing import Set, Dict, Iterable, TYPE_CHECKING, TypeVar
 
-from .errors import OmenNoPkError
+from .errors import OmenNoPkError, OmenRollbackError
 import logging as log
 
 from .selectable import Selectable
@@ -35,6 +35,8 @@ class Table(Selectable[T]):
 
     def __init__(self, mgr: "Omen"):
         """Bind table to omen manager."""
+        self._tx_removed = set()
+        self._tx_added = set()
         self.manager = mgr
         # noinspection PyTypeChecker
         self._cache: Dict[dict, "ObjBase"] = weakref.WeakValueDictionary()
@@ -73,6 +75,11 @@ class Table(Selectable[T]):
 
     def _remove(self, obj: "ObjBase"):
         """Remove an object from the db, without cascading."""
+        if self._in_tx():
+            self._tx_removed[tid].add(obj)
+            self._tx_added[tid].discard(obj)
+            return
+
         self._cache.pop(obj._to_pk_tuple(), None)
         vals = obj._to_pk()
         self.db.delete(self.table_name, **vals)
@@ -97,6 +104,11 @@ class Table(Selectable[T]):
 
     def insert(self, obj: T, id_field):
         """Update the db + cache from object."""
+        if self._in_tx():
+            self._tx_added.add(obj)
+            self._tx_removed.discard(obj)
+            return
+
         vals = obj._to_db()
         ret = self.db.insert(self.table_name, **vals)
         # force id's in there
@@ -150,14 +162,13 @@ class Table(Selectable[T]):
         return self.db.count(self.table_name, kws)
 
     @contextlib.contextmanager
-    def transaction(self):
+    def _unsafe_transaction(self):
         tid = threading.get_ident()
         self._tx_objs[tid] = set()
         needs_rollback = set()
         try:
             with self.db.transaction():
                 yield self
-                # todo, have to implemnent a copy/rollback
                 for obj in self._tx_objs[tid]:
                     obj.__exit__(None, None, None)
                     needs_rollback.add(obj)
@@ -168,8 +179,18 @@ class Table(Selectable[T]):
             # roll back objects that were committed
             for obj in needs_rollback:
                 self.select(**obj._to_pk())
+            # propagate error
+            raise
+        finally:
+            del self._tx_objs[tid]
 
-        del self._tx_objs[tid]
+    @contextlib.contextmanager
+    def transaction(self):
+        try:
+            with self._unsafe_transaction():
+                yield
+        except OmenRollbackError:
+            pass
 
     def _in_tx(self):
         return threading.get_ident() in self._tx_objs

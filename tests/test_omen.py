@@ -156,6 +156,37 @@ def test_rollback():
     assert car.gas_level == 2
 
 
+def test_bigtx_rollback():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+
+    with mgr.transaction():
+        car1.gas_level = 9
+        car2.gas_level = 9
+        raise OmenRollbackError
+
+    assert car1.gas_level == 1
+    assert car2.gas_level == 2
+
+
+def test_bigtx_commit():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+
+    with mgr.transaction():
+        car1.gas_level = 9
+        car2.gas_level = 9
+
+    assert car1.gas_level == 9
+    assert car2.gas_level == 9
+
+
 @patch("omen2.object.VERY_LARGE_LOCK_TIMEOUT", 0.1)
 def test_deadlock():
     db = SqliteDb(":memory:")
