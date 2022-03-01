@@ -187,6 +187,90 @@ def test_bigtx_commit():
     assert car2.gas_level == 9
 
 
+def test_bigtx_add_commit():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+
+    with mgr.transaction():
+        car1.gas_level = 9
+        car2 = mgr.cars.add(Car(gas_level=2))
+
+    assert car1.gas_level == 9
+    assert car2.gas_level == 2
+
+    assert len(mgr.cars) == 2
+
+
+def test_bigtx_add_rollback():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+
+    with mgr.transaction():
+        car1.gas_level = 9
+        car2 = mgr.cars.add(Car(gas_level=2))
+        raise OmenRollbackError
+
+    assert car1.gas_level == 1
+    assert len(mgr.cars) == 1
+    assert car1._is_bound
+
+    # rollback unbinds object
+    assert not car2._is_bound
+
+
+def test_bigtx_remove_commit():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+
+    with mgr.transaction():
+        mgr.cars.remove(car2)
+
+    assert car1.gas_level == 1
+    assert len(mgr.cars) == 1
+
+
+def test_bigtx_remove_rollback():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+
+    with mgr.transaction():
+        mgr.cars.remove(car2)
+        raise OmenRollbackError
+
+    assert car1.gas_level == 1
+    assert car2.gas_level == 2
+    assert len(mgr.cars) == 2
+
+
+def test_bigtx_add_dup():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+
+    with pytest.raises(IntegrityError):
+        with mgr.transaction():
+            mgr.cars.add(Car(id=2, gas_level=2))
+
+            # this raises inline
+            with pytest.raises(IntegrityError):
+                mgr.cars.add(Car(id=2, gas_level=2))
+
+            # this will raise on the way out
+            car2 = mgr.cars.add(Car(id=3, gas_level=2))
+            car2.id = 2
+    assert len(mgr.cars) == 0
+
+
 @patch("omen2.object.VERY_LARGE_LOCK_TIMEOUT", 0.1)
 def test_deadlock():
     db = SqliteDb(":memory:")
@@ -675,8 +759,10 @@ def test_unbound_basics():
     assert str(c1) == str(dct)
 
     cx.id = None
+
     with pytest.raises(OmenNoPkError):
-        _ = {cx}
+        # no pk, cannot compare
+        assert not cx == c1
 
     # ok to use with on unbound - does nothing
     with c1:

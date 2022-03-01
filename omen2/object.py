@@ -62,7 +62,10 @@ class ObjBase:
         return str(self._to_db())
 
     def __hash__(self):
-        return hash(self._to_pk_tuple())
+        try:
+            return hash(self._to_pk_tuple())
+        except OmenNoPkError:
+            return id(self)
 
     def _to_pk_tuple(self):
         return tuple(sorted(self._to_pk().items()))
@@ -422,7 +425,7 @@ class ObjBase:
 
         if self.__meta.table:
             table = self.__meta.table
-            table._remove(self)
+            table._db_remove(self)
 
     def _save(self, keys: Iterable[str]):
         """Save myself to my table."""
@@ -430,7 +433,7 @@ class ObjBase:
         need_id_field = self._need_id()
         table = self.__meta.table
         if need_id_field or self.__meta.new:
-            table.insert(self, need_id_field)
+            table.db_insert(self, need_id_field)
         elif keys:
             table.update(self, keys)
 
