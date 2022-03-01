@@ -21,6 +21,12 @@ U = TypeVar("U", bound="ObjBase")
 
 
 class TxStatus(Enum):
+    """Status of objects in per-thread transaction cache.
+    UPDATE: object was edited
+    ADD: object was added
+    REMOVE: object was removed
+    """
+
     UPDATE = 1
     ADD = 2
     REMOVE = 3
@@ -137,6 +143,15 @@ class Table(Selectable[T]):
         """Call select on the underlying db, given a where dict of keys/values."""
         return self.db.select(self.table_name, None, where)
 
+    def __select_intx(self, where) -> Iterable[T]:
+        if self._in_tx():
+            tid = threading.get_ident()
+            for obj, status in self._tx_objs.get(tid, {}).items():
+                if status != TxStatus.ADD:
+                    continue
+                if obj._matches(where):
+                    yield obj
+
     def __select(self, where) -> Iterable[T]:
         db_pks = set()
         db_where = {k: v for k, v in where.items() if k in self.field_names}
@@ -146,19 +161,27 @@ class Table(Selectable[T]):
             pk = obj._to_pk_tuple()
             cached: "ObjBase" = self._cache.get(pk)
             db_pks.add(pk)
+            if self._in_tx():
+                tid = threading.get_ident()
+                status = self._tx_objs[tid].get(obj, None)
+                if status != TxStatus.UPDATE:
+                    continue
             if cached:
-                update = obj._to_db()
-                already = cached._to_db()
-                if update != already:
+                if obj._to_db() != cached._to_db():
                     log.debug("updating %s from db", repr(obj))
                     cached._update_from_object(obj)
                 obj = cached
             else:
                 obj._bind(table=self)
                 self._add_cache(obj)
-            if all(getattr(obj, k) == v for k, v in attr_where.items()):
+            if obj._matches(attr_where):
                 yield obj
 
+        yield from self.__select_intx(where)
+
+        self.__clean_cache(where, db_pks)
+
+    def __clean_cache(self, where, db_pks):
         # remove cached items that are no longer in the db
         remove_from_cache = set()
         for k, v in self._cache.items():
@@ -211,6 +234,7 @@ class Table(Selectable[T]):
 
     @contextlib.contextmanager
     def transaction(self):
+        """Use in a with block to enter a transaction on this table only."""
         try:
             with self._unsafe_transaction():
                 yield

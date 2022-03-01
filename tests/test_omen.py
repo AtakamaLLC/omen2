@@ -212,6 +212,8 @@ def test_bigtx_add_rollback():
     with mgr.transaction():
         car1.gas_level = 9
         car2 = mgr.cars.add(Car(gas_level=2))
+        c2 = mgr.cars.select_one(gas_level=2)
+        assert c2 is car2
         raise OmenRollbackError
 
     assert car1.gas_level == 1
@@ -245,11 +247,13 @@ def test_bigtx_remove_rollback():
 
     with mgr.transaction():
         mgr.cars.remove(car2)
+        assert mgr.cars.select_one(gas_level=2) is None
         raise OmenRollbackError
 
     assert car1.gas_level == 1
     assert car2.gas_level == 2
     assert len(mgr.cars) == 2
+    assert mgr.cars.select_one(gas_level=2) is car2
 
 
 def test_bigtx_add_dup():
