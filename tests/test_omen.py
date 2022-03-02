@@ -187,6 +187,29 @@ def test_bigtx_commit():
     assert car2.gas_level == 9
 
 
+def test_tabtx():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+
+    with mgr.cars.transaction():
+        car1.gas_level = 9
+        car2.gas_level = 9
+
+    assert car1.gas_level == 9
+    assert car2.gas_level == 9
+
+    with mgr.cars.transaction():
+        car1.gas_level = 1
+        car2.gas_level = 2
+        raise OmenRollbackError
+
+    assert car1.gas_level == 9
+    assert car2.gas_level == 9
+
+
 def test_bigtx_add_commit():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db, cars=Cars)
@@ -260,9 +283,11 @@ def test_bigtx_add_dup():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db, cars=Cars)
     mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(id=1, gas_level=1))
 
     with pytest.raises(IntegrityError):
         with mgr.transaction():
+            car1.gas_level = 9
             mgr.cars.add(Car(id=2, gas_level=2))
 
             # this raises inline
@@ -272,7 +297,8 @@ def test_bigtx_add_dup():
             # this will raise on the way out
             car2 = mgr.cars.add(Car(id=3, gas_level=2))
             car2.id = 2
-    assert len(mgr.cars) == 0
+    assert len(mgr.cars) == 1
+    assert mgr.cars.select_one(gas_level=1)
 
 
 @patch("omen2.object.VERY_LARGE_LOCK_TIMEOUT", 0.1)
