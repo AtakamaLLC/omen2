@@ -1,6 +1,8 @@
 """Code generation types: imported by all codegen users."""
 from typing import Callable
 
+__autodoc__ = False
+
 from notanorm import DbType
 
 
