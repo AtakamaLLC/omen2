@@ -10,6 +10,9 @@ lint:
 	python -m pylint omen2
 	black omen2
 
+docs:
+	docmd omen2 -o docs2 -u https://github.com/atakamallc/omen2/blob/master/omen2
+
 black:
 	black omen2
 
