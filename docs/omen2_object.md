@@ -7,11 +7,17 @@ Omen2 object and associated classes.
 Derive from this type so that track-changes works with your custom object.
 
 
+
 ## ObjBase(object)
 Object base class, from which all objects are derived.
 
 
+#### .__init__(self, **kws)
+Override this to control initialization, generally calling it *after* you do your own init.
+
+
 ## ObjMeta(object)
 Object private metadata containing the bound table, a lock, and other flags.
+
 
 

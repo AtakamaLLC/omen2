@@ -19,3 +19,4 @@ Read objects of specified class.
 #### .select_one(self, _where={}, **kws) -> Union[~T, NoneType]
 Return one row, None, or raises an OmenMoreThanOneError.
 
+

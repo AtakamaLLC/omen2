@@ -7,6 +7,9 @@ Simple object manager.
 Object relational manager: read and write objects from a db.
 
 
+#### .__init__(self, db:notanorm.base.DbBase, module=None, type_checking=False, **table_types)
+Create a new manager with a db connection.
+
 #### .dump_dict(self) -> Dict[str, Iterable[Dict[str, Any]]]
 Dump every table as a dictionary.
 
@@ -21,4 +24,5 @@ Load every table from a dictionary.
 
 #### .set_table(self, table:omen2.table.Table)
 Set the table object associated with teh table type
+
 

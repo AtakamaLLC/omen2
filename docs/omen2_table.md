@@ -13,9 +13,13 @@ Reload the objects in the cache from the db.
 #### .select(self, _where={}, **kws) -> Iterable[~T]
 Read objects from the cache.
 
+
 ## Table(Selectable) [T=ObjBase]
 Omen2: Table base class from which tables are derived.
 
+
+#### .__init__(self, mgr:'Omen')
+Bind table to omen manager.
 
 #### .add(self, obj:~U) -> ~U
 Insert an object into the db
@@ -40,4 +44,5 @@ Read objects of specified class.
 
 #### .update(self, obj:~T, keys:Iterable[str])
 Add object to db + cache
+
 

@@ -7,6 +7,13 @@ Omen2: generate python code from a database schema.
 Generate code from a database schema.
 
 
+#### .__init__(self, module_path, class_type=None)
+Create an omen2 codegen object.
+
+Args:
+    module_path: package.module.ClassName
+
+
 #### .gen_class(out, name, dbtab:'DbTable')
 Generate the derived classes for a single DBTable
 
@@ -53,6 +60,7 @@ Example: <module-path>_gen.py
 
 #### .parse_class_path(path)
 Parse the package.module.ClassName path.
+
 
 ## Functions:
 
