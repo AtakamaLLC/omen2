@@ -9,5 +9,5 @@ repos:
       name: docmd
       language: system
       entry: bash -c "make docs"
-      files: policy_basics
+      files: . 
       
