@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from omen2 import ObjBase, Omen, Table
     from typing import Type
 
-T = TypeVar("T")
+T = TypeVar("T", bound="ObjBase")
 
 
 # noinspection PyProtectedMember,PyDefaultArgument
@@ -109,7 +109,7 @@ class Relation(Selectable[T]):
     def commit(self, manager=None):
         """Bind/add any items were added while I was unbound.
 
-        # TODO: relation-with-blocks that track changes, just like their parents.
+        TODO: relation-with-blocks that track changes, just like their parents.
         """
         if not manager:
             manager = self.table.manager

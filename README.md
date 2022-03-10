@@ -16,6 +16,7 @@ omen2 is not fully flexible with regards to database structure:
 
  - related tables must have primary keys
 
+[autodoc documentation](docs/omen2.md)
 
 ```python
 from notanorm import SqliteDb

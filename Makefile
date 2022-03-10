@@ -10,6 +10,9 @@ lint:
 	python -m pylint omen2
 	black omen2
 
+docs:
+	PYTHONPATH=. docmd omen2 -o docs -u https://github.com/atakamallc/omen2/blob/master/omen2
+
 black:
 	black omen2
 
@@ -23,3 +26,6 @@ publish:
 
 install-hooks:
 	pre-commit install
+
+
+.PHONY: docs black publish env requirements
