@@ -27,11 +27,11 @@ Insert an object into the db
 #### .count(self, _where={}, **kws) -> int
 Return count of objs matching where clause.
 
+#### .db_insert(self, obj:~T, id_field)
+Update the db + cache from object.
+
 #### .db_select(self, where)
 Call select on the underlying db, given a where dict of keys/values.
-
-#### .insert(self, obj:~T, id_field)
-Update the db + cache from object.
 
 #### .new(self, *a, **kw) -> ~T
 Convenience function to create a new row and add it to the db.
@@ -42,7 +42,19 @@ Remove an object from the db.
 #### .select(self, _where={}, **kws) -> Iterable[~T]
 Read objects of specified class.
 
+#### .transaction(self)
+Use in a with block to enter a transaction on this table only.
+
 #### .update(self, obj:~T, keys:Iterable[str])
 Add object to db + cache
+
+
+## TxStatus(Enum)
+Status of objects in per-thread transaction cache.
+UPDATE: object was edited
+ADD: object was added
+REMOVE: object was removed
+
+
 
 
