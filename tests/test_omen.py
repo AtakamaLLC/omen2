@@ -156,6 +156,151 @@ def test_rollback():
     assert car.gas_level == 2
 
 
+def test_bigtx_rollback():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+
+    with mgr.transaction():
+        car1.gas_level = 9
+        car2.gas_level = 9
+        raise OmenRollbackError
+
+    assert car1.gas_level == 1
+    assert car2.gas_level == 2
+
+
+def test_bigtx_commit():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+
+    with mgr.transaction():
+        car1.gas_level = 9
+        car2.gas_level = 9
+
+    assert car1.gas_level == 9
+    assert car2.gas_level == 9
+
+
+def test_tabtx():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+
+    with mgr.cars.transaction():
+        car1.gas_level = 9
+        car2.gas_level = 9
+
+    assert car1.gas_level == 9
+    assert car2.gas_level == 9
+
+    with mgr.cars.transaction():
+        car1.gas_level = 1
+        car2.gas_level = 2
+        raise OmenRollbackError
+
+    assert car1.gas_level == 9
+    assert car2.gas_level == 9
+
+
+def test_bigtx_add_commit():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+
+    with mgr.transaction():
+        car1.gas_level = 9
+        car2 = mgr.cars.add(Car(gas_level=2))
+
+    assert car1.gas_level == 9
+    assert car2.gas_level == 2
+
+    assert len(mgr.cars) == 2
+
+
+def test_bigtx_add_rollback():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+
+    with mgr.transaction():
+        car1.gas_level = 9
+        car2 = mgr.cars.add(Car(gas_level=2))
+        c2 = mgr.cars.select_one(gas_level=2)
+        assert c2 is car2
+        raise OmenRollbackError
+
+    assert car1.gas_level == 1
+    assert len(mgr.cars) == 1
+    assert car1._is_bound
+
+    # rollback unbinds object
+    assert not car2._is_bound
+
+
+def test_bigtx_remove_commit():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+
+    with mgr.transaction():
+        mgr.cars.remove(car2)
+
+    assert car1.gas_level == 1
+    assert len(mgr.cars) == 1
+
+
+def test_bigtx_remove_rollback():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+
+    with mgr.transaction():
+        mgr.cars.remove(car2)
+        assert mgr.cars.select_one(gas_level=2) is None
+        raise OmenRollbackError
+
+    assert car1.gas_level == 1
+    assert car2.gas_level == 2
+    assert len(mgr.cars) == 2
+    assert mgr.cars.select_one(gas_level=2) is car2
+
+
+def test_bigtx_add_dup():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(id=1, gas_level=1))
+
+    with pytest.raises(IntegrityError):
+        with mgr.transaction():
+            car1.gas_level = 9
+            mgr.cars.add(Car(id=2, gas_level=2))
+
+            # this raises inline
+            with pytest.raises(IntegrityError):
+                mgr.cars.add(Car(id=2, gas_level=2))
+
+            # this will raise on the way out
+            car2 = mgr.cars.add(Car(id=3, gas_level=2))
+            car2.id = 2
+    assert len(mgr.cars) == 1
+    assert mgr.cars.select_one(gas_level=1)
+
+
 @patch("omen2.object.VERY_LARGE_LOCK_TIMEOUT", 0.1)
 def test_deadlock():
     db = SqliteDb(":memory:")
@@ -644,8 +789,10 @@ def test_unbound_basics():
     assert str(c1) == str(dct)
 
     cx.id = None
+
     with pytest.raises(OmenNoPkError):
-        _ = {cx}
+        # no pk, cannot compare
+        assert not cx == c1
 
     # ok to use with on unbound - does nothing
     with c1:

@@ -1,9 +1,12 @@
 """Omen2: Table class and supporting types"""
+import contextlib
+import threading
 import weakref
 from contextlib import suppress
-from typing import Set, Dict, Iterable, TYPE_CHECKING, TypeVar
+from enum import Enum
+from typing import Set, Dict, Iterable, TYPE_CHECKING, TypeVar, Tuple
 
-from .errors import OmenNoPkError
+from .errors import OmenNoPkError, OmenRollbackError, IntegrityError
 import logging as log
 
 from .selectable import Selectable
@@ -15,6 +18,18 @@ if TYPE_CHECKING:
 
 T = TypeVar("T", bound="ObjBase")
 U = TypeVar("U", bound="ObjBase")
+
+
+class TxStatus(Enum):
+    """Status of objects in per-thread transaction cache.
+    UPDATE: object was edited
+    ADD: object was added
+    REMOVE: object was removed
+    """
+
+    UPDATE = 1
+    ADD = 2
+    REMOVE = 3
 
 
 # noinspection PyDefaultArgument,PyProtectedMember
@@ -36,6 +51,9 @@ class Table(Selectable[T]):
         self.manager = mgr
         # noinspection PyTypeChecker
         self._cache: Dict[dict, "ObjBase"] = weakref.WeakValueDictionary()
+
+        self._tx_objs: Dict[int, Dict["ObjBase", TxStatus]] = {}
+
         mgr.set_table(self)
 
     @property
@@ -51,6 +69,19 @@ class Table(Selectable[T]):
 
     def add(self, obj: U) -> U:
         """Insert an object into the db"""
+        if self._in_tx():
+            tid = threading.get_ident()
+            if obj in self._tx_objs[tid]:
+                for sub in self._tx_objs[tid]:
+                    if obj == sub:
+                        if id(obj) != id(sub):
+                            raise IntegrityError
+            self._tx_objs[tid][obj] = TxStatus.ADD
+            return obj
+        else:
+            return self._notx_add(obj)
+
+    def _notx_add(self, obj: U) -> U:
         obj._bind(table=self)
         obj._commit()
         return obj
@@ -68,8 +99,15 @@ class Table(Selectable[T]):
         assert obj._table is self
         obj._remove()
 
-    def _remove(self, obj: "ObjBase"):
+    def _db_remove(self, obj: "ObjBase"):
         """Remove an object from the db, without cascading."""
+        if self._in_tx():
+            tid = threading.get_ident()
+            self._tx_objs[tid][obj] = TxStatus.REMOVE
+            return
+        self._notx_remove(obj)
+
+    def _notx_remove(self, obj: "ObjBase"):
         self._cache.pop(obj._to_pk_tuple(), None)
         vals = obj._to_pk()
         self.db.delete(self.table_name, **vals)
@@ -92,7 +130,7 @@ class Table(Selectable[T]):
             # update old refs as best we can
             alr._update_from_object(obj)
 
-    def insert(self, obj: T, id_field):
+    def db_insert(self, obj: T, id_field):
         """Update the db + cache from object."""
         vals = obj._to_db()
         ret = self.db.insert(self.table_name, **vals)
@@ -105,6 +143,15 @@ class Table(Selectable[T]):
         """Call select on the underlying db, given a where dict of keys/values."""
         return self.db.select(self.table_name, None, where)
 
+    def __select_intx(self, where) -> Iterable[T]:
+        if self._in_tx():
+            tid = threading.get_ident()
+            for obj, status in self._tx_objs.get(tid, {}).items():
+                if status != TxStatus.ADD:
+                    continue
+                if obj._matches(where):
+                    yield obj
+
     def __select(self, where) -> Iterable[T]:
         db_pks = set()
         db_where = {k: v for k, v in where.items() if k in self.field_names}
@@ -114,19 +161,27 @@ class Table(Selectable[T]):
             pk = obj._to_pk_tuple()
             cached: "ObjBase" = self._cache.get(pk)
             db_pks.add(pk)
+            if self._in_tx():
+                tid = threading.get_ident()
+                status = self._tx_objs[tid].get(obj, None)
+                if status != TxStatus.UPDATE:
+                    continue
             if cached:
-                update = obj._to_db()
-                already = cached._to_db()
-                if update != already:
+                if obj._to_db() != cached._to_db():
                     log.debug("updating %s from db", repr(obj))
                     cached._update_from_object(obj)
                 obj = cached
             else:
                 obj._bind(table=self)
                 self._add_cache(obj)
-            if all(getattr(obj, k) == v for k, v in attr_where.items()):
+            if obj._matches(attr_where):
                 yield obj
 
+        yield from self.__select_intx(where)
+
+        self.__clean_cache(where, db_pks)
+
+    def __clean_cache(self, where, db_pks):
         # remove cached items that are no longer in the db
         remove_from_cache = set()
         for k, v in self._cache.items():
@@ -145,6 +200,56 @@ class Table(Selectable[T]):
         """Return count of objs matching where clause."""
         kws.update(_where)
         return self.db.count(self.table_name, kws)
+
+    @contextlib.contextmanager
+    def _unsafe_transaction(self):
+        tid = threading.get_ident()
+        self._tx_objs[tid] = {}
+        needs_rollback: Set[Tuple["ObjBase", TxStatus]] = set()
+        try:
+            with self.db.transaction():
+                yield self
+                for obj, status in self._tx_objs[tid].items():
+                    if status == TxStatus.UPDATE:
+                        obj.__exit__(None, None, None)
+                    elif status == TxStatus.ADD:
+                        self._notx_add(obj)
+                    elif status == TxStatus.REMOVE:
+                        self._notx_remove(obj)
+                    needs_rollback.add((obj, status))
+        except Exception as e:
+            for obj, status in self._tx_objs[tid].items():
+                if obj not in needs_rollback:
+                    obj.__exit__(type(e), e, None)
+            # update cache from objs that appeared committed
+            for obj, status in needs_rollback:
+                if status == TxStatus.ADD:
+                    self._cache.pop(obj._to_pk_tuple(), None)
+                else:
+                    self.select(**obj._to_pk())
+            # propagate error
+            raise
+        finally:
+            del self._tx_objs[tid]
+
+    @contextlib.contextmanager
+    def transaction(self):
+        """Use in a with block to enter a transaction on this table only."""
+        try:
+            with self._unsafe_transaction():
+                yield
+        except OmenRollbackError:
+            pass
+
+    def _in_tx(self):
+        return threading.get_ident() in self._tx_objs
+
+    def _add_object_to_tx(self, obj: "ObjBase"):
+        assert self._in_tx()
+        objs = self._tx_objs[threading.get_ident()]
+        if obj not in objs:
+            obj.__enter__()
+            objs[obj] = TxStatus.UPDATE
 
 
 # noinspection PyDefaultArgument,PyProtectedMember

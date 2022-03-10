@@ -1,10 +1,12 @@
 """Simple object manager."""
 
 import abc
+import contextlib
 import importlib
 import os
 import sys
 import logging as log
+from contextlib import contextmanager
 
 from notanorm import DbBase, SqliteDb, DbModel
 from typing import Any, Optional, Dict, Type, Iterable, TypeVar
@@ -12,6 +14,7 @@ from typing import Any, Optional, Dict, Type, Iterable, TypeVar
 from .table import Table
 from .object import ObjBase
 from .codegen import CodeGen
+from .errors import OmenRollbackError
 
 T = TypeVar("T", bound=Table)
 
@@ -205,3 +208,21 @@ class Omen(abc.ABC):
     def schema(cls, version):
         """Override this to return a schema for a given version."""
         ...
+
+    @contextmanager
+    def transaction(self):
+        """Begin a database-wide transaction.
+
+        This will accumulate object modifications, adds and removes, and roll them back on exception.
+
+        It uses the underlying database's transaction mechanism.
+
+        On exception it will restore any cached information to the previous state.
+        """
+        try:
+            with contextlib.ExitStack() as stack:
+                for tab in self.tables.values():
+                    stack.enter_context(tab._unsafe_transaction())
+                yield self
+        except OmenRollbackError:
+            pass

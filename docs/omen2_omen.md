@@ -25,4 +25,14 @@ Load every table from a dictionary.
 #### .set_table(self, table:omen2.table.Table)
 Set the table object associated with teh table type
 
+#### .transaction(self)
+Begin a database-wide transaction.
+
+This will accumulate object modifications, adds and removes, and roll them back on exception.
+
+It uses the underlying database's transaction mechanism.
+
+On exception it will restore any cached information to the previous state.
+
+
 

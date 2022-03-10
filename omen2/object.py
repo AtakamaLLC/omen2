@@ -62,7 +62,10 @@ class ObjBase:
         return str(self._to_db())
 
     def __hash__(self):
-        return hash(self._to_pk_tuple())
+        try:
+            return hash(self._to_pk_tuple())
+        except OmenNoPkError:
+            return id(self)
 
     def _to_pk_tuple(self):
         return tuple(sorted(self._to_pk().items()))
@@ -318,6 +321,13 @@ class ObjBase:
             self._checktype(k, v)
 
         if self.__meta and not self.__meta.suppress_set_changes:
+            if (
+                self.__meta.table
+                and self.__meta.table._in_tx()
+                and not self.__meta.locked
+            ):
+                self.__meta.table._add_object_to_tx(self)
+
             if self.__meta.table and not self.__meta.locked:
                 raise OmenUseWithError("use with: protocol for bound objects")
             if self.__meta.table and self.__meta.lock_id != threading.get_ident():
@@ -415,7 +425,7 @@ class ObjBase:
 
         if self.__meta.table:
             table = self.__meta.table
-            table._remove(self)
+            table._db_remove(self)
 
     def _save(self, keys: Iterable[str]):
         """Save myself to my table."""
@@ -423,7 +433,7 @@ class ObjBase:
         need_id_field = self._need_id()
         table = self.__meta.table
         if need_id_field or self.__meta.new:
-            table.insert(self, need_id_field)
+            table.db_insert(self, need_id_field)
         elif keys:
             table.update(self, keys)
 
@@ -445,7 +455,7 @@ class ObjBase:
             self.__meta.lock_id = threading.get_ident()
         return self
 
-    def __exit__(self, typ, val, ex):
+    def __exit__(self, typ, ex, tb):
         """Finished with write, call commit or not, based on exception."""
         if not self.__meta or not self.__meta.locked:
             # unbound objects aren't locked, and don't need the with: protocol

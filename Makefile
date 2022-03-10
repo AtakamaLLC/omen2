@@ -14,7 +14,7 @@ docs:
 	PYTHONPATH=. docmd omen2 -o docs -u https://github.com/atakamallc/omen2/blob/master/omen2
 
 black:
-	black omen2
+	black omen2 tests
 
 test:
 	pytest -n=3 --cov omen2 -v tests
