@@ -210,7 +210,6 @@ class Omen(abc.ABC):
     @abc.abstractmethod
     def schema(cls, version):
         """Override this to return a schema for a given version."""
-        ...
 
     @contextmanager
     def transaction(self):
