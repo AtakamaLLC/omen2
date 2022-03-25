@@ -1,4 +1,6 @@
 #!/bin/bash
 
-bash <(curl -s https://codecov.io/bash)
-
+python -m virtualenv env
+. ./env/bin/activate || . ./env/Scripts/activate
+pip install codecov
+python -m codecov
