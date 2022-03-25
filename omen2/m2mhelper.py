@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: © Atakama, Inc <support@atakama.com>
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 """Many-to-many relationship helper.   Provides nice syntax for interacting with m2m relationships."""
 
 from omen2.object import ObjBase

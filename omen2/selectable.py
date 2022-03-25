@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: © Atakama, Inc <support@atakama.com>
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 """Generic selectable support for tables, relations and m2mhelpers."""
 from typing import TypeVar, Generic, Optional, Iterable, TYPE_CHECKING, Type
 
