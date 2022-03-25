@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: © Atakama, Inc <support@atakama.com>
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 """Omen2: One to many relationship helper."""
 
 from typing import TypeVar, Callable, Iterable, TYPE_CHECKING, List, Optional

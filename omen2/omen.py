@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: © Atakama, Inc <support@atakama.com>
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 """Simple object manager."""
 
 import abc
@@ -207,7 +210,6 @@ class Omen(abc.ABC):
     @abc.abstractmethod
     def schema(cls, version):
         """Override this to return a schema for a given version."""
-        ...
 
     @contextmanager
     def transaction(self):
