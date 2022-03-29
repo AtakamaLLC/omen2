@@ -212,6 +212,15 @@ def test_tabtx():
     assert car1.gas_level == 9
     assert car2.gas_level == 9
 
+    # select outside tx
+    assert mgr.cars.select_one(id=car1.id) is car1
+    assert mgr.cars.select_one(id=car2.id) is car2
+
+    with mgr.cars.transaction():
+        # select inside tx
+        assert mgr.cars.select_one(id=car1.id) is car1
+        assert mgr.cars.select_one(id=car2.id) is car2
+
 
 def test_bigtx_add_commit():
     db = SqliteDb(":memory:")

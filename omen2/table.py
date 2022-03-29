@@ -167,7 +167,7 @@ class Table(Selectable[T]):
             if self._in_tx():
                 tid = threading.get_ident()
                 status = self._tx_objs[tid].get(obj, None)
-                if status != TxStatus.UPDATE:
+                if status and status != TxStatus.UPDATE:
                     continue
             if cached:
                 if obj._to_db() != cached._to_db():
