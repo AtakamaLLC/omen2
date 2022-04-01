@@ -13,6 +13,7 @@ from .errors import OmenNoPkError, OmenRollbackError, IntegrityError
 import logging as log
 
 from .selectable import Selectable
+from .object import ObjMeta
 
 if TYPE_CHECKING:
     from notanorm import DbBase
@@ -206,34 +207,35 @@ class Table(Selectable[T]):
 
     @contextlib.contextmanager
     def _unsafe_transaction(self):
-        tid = threading.get_ident()
-        self._tx_objs[tid] = {}
-        needs_rollback: Set[Tuple["ObjBase", TxStatus]] = set()
-        try:
-            with self.db.transaction():
-                yield self
+        with ObjMeta.lock:
+            tid = threading.get_ident()
+            self._tx_objs[tid] = {}
+            needs_rollback: Set[Tuple["ObjBase", TxStatus]] = set()
+            try:
+                with self.db.transaction():
+                    yield self
+                    for obj, status in self._tx_objs[tid].items():
+                        if status == TxStatus.UPDATE:
+                            obj.__exit__(None, None, None)
+                        elif status == TxStatus.ADD:
+                            self._notx_add(obj)
+                        elif status == TxStatus.REMOVE:
+                            self._notx_remove(obj)
+                        needs_rollback.add((obj, status))
+            except Exception as e:
                 for obj, status in self._tx_objs[tid].items():
-                    if status == TxStatus.UPDATE:
-                        obj.__exit__(None, None, None)
-                    elif status == TxStatus.ADD:
-                        self._notx_add(obj)
-                    elif status == TxStatus.REMOVE:
-                        self._notx_remove(obj)
-                    needs_rollback.add((obj, status))
-        except Exception as e:
-            for obj, status in self._tx_objs[tid].items():
-                if obj not in needs_rollback:
-                    obj.__exit__(type(e), e, None)
-            # update cache from objs that appeared committed
-            for obj, status in needs_rollback:
-                if status == TxStatus.ADD:
-                    self._cache.pop(obj._to_pk_tuple(), None)
-                else:
-                    self.select(**obj._to_pk())
-            # propagate error
-            raise
-        finally:
-            del self._tx_objs[tid]
+                    if obj not in needs_rollback:
+                        obj.__exit__(type(e), e, None)
+                # update cache from objs that appeared committed
+                for obj, status in needs_rollback:
+                    if status == TxStatus.ADD:
+                        self._cache.pop(obj._to_pk_tuple(), None)
+                    else:
+                        self.select(**obj._to_pk())
+                # propagate error
+                raise
+            finally:
+                del self._tx_objs[tid]
 
     @contextlib.contextmanager
     def transaction(self):

@@ -5,6 +5,7 @@ import base64
 
 import gc
 import logging as log
+import threading
 import time
 from contextlib import suppress
 from multiprocessing.pool import ThreadPool
@@ -188,6 +189,44 @@ def test_bigtx_commit():
 
     assert car1.gas_level == 9
     assert car2.gas_level == 9
+
+
+@patch("omen2.object.VERY_LARGE_LOCK_TIMEOUT", 5)
+def test_tabtx_no_deadlock():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+    deadlocked = True
+
+    def f1():
+        log.info("locking-1")
+        with car1:
+            car1.gas_level = 11
+            log.info("locked-1 - sleep")
+            time.sleep(1)
+        log.info("unlocked-1")
+
+    def f2():
+        time.sleep(0.5)
+        log.info("before-tx-2")
+        with mgr.cars.transaction():
+            log.info("in-tx-2")
+            car2.gas_level = 12
+            log.info("in-tx-2-after-set-attr")
+        log.info("after-tx-2")
+        nonlocal deadlocked
+        deadlocked = False
+
+    t1 = threading.Thread(target=f1)
+    t1.start()
+    t2 = threading.Thread(target=f2)
+    t2.start()
+
+    t1.join()
+    t2.join()
+    assert not deadlocked
 
 
 def test_tabtx():
