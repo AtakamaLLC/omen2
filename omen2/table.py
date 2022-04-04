@@ -206,19 +206,20 @@ class Table(Selectable[T]):
         kws.update(_where)
         return self.db.count(self.table_name, kws)
 
+    def _wait_for_locked_objects(self):
+        try:
+            locked_obj = self.locked_objs.pop()
+            while locked_obj:
+                with locked_obj._lock:
+                    pass
+                locked_obj = self.locked_objs.pop()
+        except KeyError:
+            pass
+
     @contextlib.contextmanager
     def _unsafe_transaction(self):
         with self.lock:
-            # wait for all locked objects to be released
-            try:
-                locked_obj = self.locked_objs.pop()
-                while locked_obj:
-                    with locked_obj._lock:
-                        pass
-                    locked_obj = self.locked_objs.pop()
-            except KeyError:
-                pass
-
+            self._wait_for_locked_objects()
             tid = threading.get_ident()
             self._tx_objs[tid] = {}
             needs_rollback: Set[Tuple["ObjBase", TxStatus]] = set()
