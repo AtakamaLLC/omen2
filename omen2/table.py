@@ -13,7 +13,6 @@ from .errors import OmenNoPkError, OmenRollbackError, IntegrityError
 import logging as log
 
 from .selectable import Selectable
-from .object import ObjMeta
 
 if TYPE_CHECKING:
     from notanorm import DbBase
@@ -57,6 +56,8 @@ class Table(Selectable[T]):
         self._cache: Dict[dict, "ObjBase"] = weakref.WeakValueDictionary()
 
         self._tx_objs: Dict[int, Dict["ObjBase", TxStatus]] = {}
+        self.locked_objs: Set["ObjBase"] = set()
+        self.lock = threading.RLock()
 
         mgr.set_table(self)
 
@@ -207,7 +208,17 @@ class Table(Selectable[T]):
 
     @contextlib.contextmanager
     def _unsafe_transaction(self):
-        with ObjMeta.lock:
+        with self.lock:
+            # wait for all locked objects to be released
+            try:
+                locked_obj = self.locked_objs.pop()
+                while locked_obj:
+                    with locked_obj._lock:
+                        pass
+                    locked_obj = self.locked_objs.pop()
+            except KeyError:
+                pass
+
             tid = threading.get_ident()
             self._tx_objs[tid] = {}
             needs_rollback: Set[Tuple["ObjBase", TxStatus]] = set()

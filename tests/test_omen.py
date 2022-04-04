@@ -191,33 +191,26 @@ def test_bigtx_commit():
     assert car2.gas_level == 9
 
 
-@patch("omen2.object.VERY_LARGE_LOCK_TIMEOUT", 5)
+@patch("omen2.object.VERY_LARGE_LOCK_TIMEOUT", 3)
 def test_tabtx_no_deadlock():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db, cars=Cars)
     mgr.cars = mgr[Cars]
     car1 = mgr.cars.add(Car(gas_level=1))
     car2 = mgr.cars.add(Car(gas_level=2))
-    deadlocked = True
+    evt = threading.Event()
 
     def f1():
-        log.info("locking-1")
         with car1:
-            car1.gas_level = 11
-            log.info("locked-1 - sleep")
+            evt.set()
             time.sleep(1)
-        log.info("unlocked-1")
+            car1.gas_level = 11
 
     def f2():
-        time.sleep(0.5)
-        log.info("before-tx-2")
+        evt.wait(timeout=0.1)
         with mgr.cars.transaction():
-            log.info("in-tx-2")
-            car2.gas_level = 12
-            log.info("in-tx-2-after-set-attr")
-        log.info("after-tx-2")
-        nonlocal deadlocked
-        deadlocked = False
+            car1.gas_level = 12
+            car2.gas_level = 13
 
     t1 = threading.Thread(target=f1)
     t1.start()
@@ -226,7 +219,9 @@ def test_tabtx_no_deadlock():
 
     t1.join()
     t2.join()
-    assert not deadlocked
+
+    assert car1.gas_level == 12
+    assert car2.gas_level == 13
 
 
 def test_tabtx():
