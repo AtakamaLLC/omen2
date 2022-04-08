@@ -27,16 +27,17 @@ log = logging.getLogger(__name__)
 class ObjMeta:
     """Object private metadata containing the bound table, a lock, and other flags."""
 
-    lock = RLock()
-    locked = False
-    new = True
-    table: Optional["Table"] = None
-    pk = None
-    lock_id = 0
-    suppress_set_changes = False
-    suppress_get_changes = False
-    changes: Dict[str, Any] = None
-    in_sync = False
+    def __init__(self):
+        self.lock = RLock()
+        self.locked = False
+        self.new = True
+        self.table: Optional["Table"] = None
+        self.pk = None
+        self.lock_id = 0
+        self.suppress_set_changes = False
+        self.suppress_get_changes = False
+        self.changes: Dict[str, Any] = None
+        self.in_sync = False
 
 
 VERY_LARGE_LOCK_TIMEOUT = 120
@@ -160,6 +161,10 @@ class ObjBase:
     @property
     def _table(self):
         return self.__meta.table
+
+    @property
+    def _lock(self):
+        return self.__meta.lock
 
     @_table.setter
     def _table(self, val):
@@ -379,7 +384,7 @@ class ObjBase:
         # these attribute sets do not go into the changeset
         # but setters still get triggered normally
         # wait for everyone else to be done writing
-        with self.__meta.lock:
+        with self._lock:
             with self._suppress_set_changes():
                 # sneak attrs in
                 for k, v in changes.items():
@@ -446,16 +451,18 @@ class ObjBase:
     def __enter__(self):
         """Lock for write, and trigger thread-isolation."""
         if self.__meta and self.__meta.table:
-            if not self.__meta.lock.acquire(timeout=VERY_LARGE_LOCK_TIMEOUT):
-                log.critical("deadlock prevented", stack_info=True)
-                raise OmenLockingError
-            if self.__meta.locked:
-                # nested with blocks could work, but they are an anti-pattern
-                self.__meta.lock.release()
-                raise OmenLockingError("nested with blocks not supported")
-            self.__meta.locked = True
-            self.__meta.changes = {}
-            self.__meta.lock_id = threading.get_ident()
+            with self._table.lock:
+                if not self._lock.acquire(timeout=VERY_LARGE_LOCK_TIMEOUT):
+                    log.critical("deadlock prevented", stack_info=True)
+                    raise OmenLockingError
+                if self.__meta.locked:
+                    # nested with blocks could work, but they are an anti-pattern
+                    self._lock.release()
+                    raise OmenLockingError("nested with blocks not supported")
+                self.__meta.locked = True
+                self.__meta.changes = {}
+                self.__meta.lock_id = threading.get_ident()
+                self._table.locked_objs.add(self)
         return self
 
     def __exit__(self, typ, ex, tb):
@@ -479,7 +486,8 @@ class ObjBase:
             self.__meta.locked = False
             self.__meta.changes = None
             self.__meta.lock_id = 0
-            self.__meta.lock.release()
+            self._lock.release()
+            self._table.locked_objs.discard(self)
 
         return False
 

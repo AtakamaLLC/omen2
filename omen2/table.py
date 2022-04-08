@@ -56,6 +56,8 @@ class Table(Selectable[T]):
         self._cache: Dict[dict, "ObjBase"] = weakref.WeakValueDictionary()
 
         self._tx_objs: Dict[int, Dict["ObjBase", TxStatus]] = {}
+        self.locked_objs: Set["ObjBase"] = set()
+        self.lock = threading.RLock()
 
         mgr.set_table(self)
 
@@ -204,36 +206,48 @@ class Table(Selectable[T]):
         kws.update(_where)
         return self.db.count(self.table_name, kws)
 
+    def _wait_for_locked_objects(self):
+        try:
+            locked_obj = self.locked_objs.pop()
+            while locked_obj:
+                with locked_obj._lock:
+                    pass
+                locked_obj = self.locked_objs.pop()
+        except KeyError:
+            pass
+
     @contextlib.contextmanager
     def _unsafe_transaction(self):
-        tid = threading.get_ident()
-        self._tx_objs[tid] = {}
-        needs_rollback: Set[Tuple["ObjBase", TxStatus]] = set()
-        try:
-            with self.db.transaction():
-                yield self
+        with self.lock:
+            self._wait_for_locked_objects()
+            tid = threading.get_ident()
+            self._tx_objs[tid] = {}
+            needs_rollback: Set[Tuple["ObjBase", TxStatus]] = set()
+            try:
+                with self.db.transaction():
+                    yield self
+                    for obj, status in self._tx_objs[tid].items():
+                        if status == TxStatus.UPDATE:
+                            obj.__exit__(None, None, None)
+                        elif status == TxStatus.ADD:
+                            self._notx_add(obj)
+                        elif status == TxStatus.REMOVE:
+                            self._notx_remove(obj)
+                        needs_rollback.add((obj, status))
+            except Exception as e:
                 for obj, status in self._tx_objs[tid].items():
-                    if status == TxStatus.UPDATE:
-                        obj.__exit__(None, None, None)
-                    elif status == TxStatus.ADD:
-                        self._notx_add(obj)
-                    elif status == TxStatus.REMOVE:
-                        self._notx_remove(obj)
-                    needs_rollback.add((obj, status))
-        except Exception as e:
-            for obj, status in self._tx_objs[tid].items():
-                if obj not in needs_rollback:
-                    obj.__exit__(type(e), e, None)
-            # update cache from objs that appeared committed
-            for obj, status in needs_rollback:
-                if status == TxStatus.ADD:
-                    self._cache.pop(obj._to_pk_tuple(), None)
-                else:
-                    self.select(**obj._to_pk())
-            # propagate error
-            raise
-        finally:
-            del self._tx_objs[tid]
+                    if obj not in needs_rollback:
+                        obj.__exit__(type(e), e, None)
+                # update cache from objs that appeared committed
+                for obj, status in needs_rollback:
+                    if status == TxStatus.ADD:
+                        self._cache.pop(obj._to_pk_tuple(), None)
+                    else:
+                        self.select(**obj._to_pk())
+                # propagate error
+                raise
+            finally:
+                del self._tx_objs[tid]
 
     @contextlib.contextmanager
     def transaction(self):
