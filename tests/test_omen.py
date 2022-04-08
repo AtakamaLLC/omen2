@@ -191,6 +191,23 @@ def test_bigtx_commit():
     assert car2.gas_level == 9
 
 
+def test_per_obj_locks():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+
+    with car1:
+        car1.gas_level = 7
+        with car2:
+            car2.gas_level = car1.gas_level
+            car1.gas_level = 8
+
+    assert car1.gas_level == 8
+    assert car2.gas_level == 7
+
+
 @patch("omen2.object.VERY_LARGE_LOCK_TIMEOUT", 3)
 def test_tabtx_no_deadlock():
     db = SqliteDb(":memory:")
