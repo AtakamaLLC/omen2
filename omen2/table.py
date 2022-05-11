@@ -148,6 +148,10 @@ class Table(Selectable[T]):
         """Call select on the underlying db, given a where dict of keys/values."""
         return self.db.select(self.table_name, None, where)
 
+    def db_select_gen(self, where, order_by=None):
+        """Call select_gen on the underlying db, given a where dict of keys/values."""
+        yield from self.db.select_gen(self.table_name, None, where, order_by=order_by)
+
     def __select_intx(self, where) -> Iterable[T]:
         if self._in_tx():
             tid = threading.get_ident()
@@ -157,11 +161,11 @@ class Table(Selectable[T]):
                 if obj._matches(where):
                     yield obj
 
-    def __select(self, where) -> Iterable[T]:
+    def __select(self, where, _order_by=None) -> Iterable[T]:
         db_pks = set()
         db_where = {k: v for k, v in where.items() if k in self.field_names}
         attr_where = {k: v for k, v in where.items() if k not in self.field_names}
-        for row in self.db_select(db_where):
+        for row in self.db_select_gen(db_where, order_by=_order_by):
             obj = self.row_type._from_db_not_new(row._asdict())
             pk = obj._to_pk_tuple()
             cached: "ObjBase" = self._cache.get(pk)
@@ -196,10 +200,13 @@ class Table(Selectable[T]):
             log.debug("removing %s from cache", pop_me)
             self._cache.pop(pop_me)
 
-    def select(self, _where={}, **kws) -> Iterable[T]:
-        """Read objects of specified class."""
+    def select(self, _where={}, _order_by=None, **kws) -> Iterable[T]:
+        """Read objects of specified class.
+
+        Specify _order_by="field" or ["field1 desc", "field2"] to sort the results.
+        """
         kws.update(_where)
-        yield from self.__select(kws)
+        yield from self.__select(kws, _order_by=_order_by)
 
     def count(self, _where={}, **kws) -> int:
         """Return count of objs matching where clause."""

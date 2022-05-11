@@ -33,14 +33,20 @@ Update the db + cache from object.
 #### .db_select(self, where)
 Call select on the underlying db, given a where dict of keys/values.
 
+#### .db_select_gen(self, where, order_by=None)
+Call select_gen on the underlying db, given a where dict of keys/values.
+
 #### .new(self, *a, **kw) -> ~T
 Convenience function to create a new row and add it to the db.
 
 #### .remove(self, obj:'ObjBase'=None, **kws)
 Remove an object from the db.
 
-#### .select(self, _where={}, **kws) -> Iterable[~T]
+#### .select(self, _where={}, _order_by=None, **kws) -> Iterable[~T]
 Read objects of specified class.
+
+Specify _order_by="field" or ["field1 desc", "field2"] to sort the results.
+
 
 #### .transaction(self)
 Use in a with block to enter a transaction on this table only.
