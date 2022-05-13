@@ -191,6 +191,17 @@ def test_bigtx_commit():
     assert car2.gas_level == 9
 
 
+def test_order_by():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+
+    assert list(mgr.cars.select(_order_by="gas_level desc")) == [car2, car1]
+    assert list(mgr.cars.select(_order_by="gas_level")) == [car1, car2]
+
+
 def test_per_obj_locks():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db, cars=Cars)
