@@ -17,7 +17,9 @@ black:
 	black omen2 tests
 
 test:
-	python -mpytest -n=3 --cov omen2 -v tests
+	pytest -n=3 --cov omen2 -v tests -k "not perf"
+	# parallel testing of perf tests doesn't work
+	pytest --cov omen2 -v tests -k "perf"
 
 publish:
 	rm -rf dist
