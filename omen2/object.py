@@ -56,6 +56,9 @@ class ObjBase:
     # objects should only have 1 variable in __dict__
     __meta: ObjMeta = None
 
+    # getattr optimization, because python is slow
+    __need_attr: bool = False
+
     def __eq__(self, obj):
         return obj._to_pk() == self._to_pk()
 
@@ -237,19 +240,23 @@ class ObjBase:
 
     def __getattribute__(self, k):
         if k[0] == "_":
-            return super().__getattribute__(k)
+            return object.__getattribute__(self, k)
 
-        if (
-            self.__meta
-            and self.__meta.locked
-            and self.__meta.lock_id == threading.get_ident()
-            and not self.__meta.suppress_get_changes
-        ):
-            return self.__meta.changes.get(k, super().__getattribute__(k))
+        if self.__need_attr:
+            # in the middle of making changes, if this is the same thread, make them visible
+            if (
+                self.__meta
+                and self.__meta.locked
+                and self.__meta.lock_id == threading.get_ident()
+                and not self.__meta.suppress_get_changes
+            ):
+                return self.__meta.changes.get(k, object.__getattribute__(self, k))
 
-        self._syncattr(k)
+        if self._sync_on_getattr:
+            # this should probably never be used, deprecate it
+            self._syncattr(k)
 
-        return super().__getattribute__(k)
+        return object.__getattribute__(self, k)
 
     def _syncattr(self, k):
         if (
@@ -263,7 +270,7 @@ class ObjBase:
                 res = self._table.db_select(self._to_pk())[0]
                 if k in res:
                     v = res[k]
-                    super().__setattr__(k, v)
+                    object.__setattr__(self, k, v)
             finally:
                 self.__meta.in_sync = False
 
@@ -320,7 +327,7 @@ class ObjBase:
 
     def __setattr__(self, k, v):
         if k[0] == "_":
-            super().__setattr__(k, v)
+            object.__setattr__(self, k, v)
             return
 
         if self.__meta:
@@ -343,8 +350,9 @@ class ObjBase:
 
         if self._is_bound and not self.__meta.suppress_set_changes:
             self.__meta.changes[k] = v
+            self.__need_attr = True
         else:
-            super().__setattr__(k, v)
+            object.__setattr__(self, k, v)
 
     def _get_related(self):
         related = {}
@@ -400,6 +408,7 @@ class ObjBase:
             changes = self.__meta.changes
             self._atomic_apply(self, changes)
             self.__meta.changes = {}
+            self.__need_attr = False
 
         # collect any primary key-cascading updates
         cascade = self._collect_cascade() if self._cascade else {}
@@ -461,6 +470,7 @@ class ObjBase:
                     raise OmenLockingError("nested with blocks not supported")
                 self.__meta.locked = True
                 self.__meta.changes = {}
+                self.__need_attr = False
                 self.__meta.lock_id = threading.get_ident()
                 self._table.locked_objs.add(self)
         return self
@@ -485,6 +495,7 @@ class ObjBase:
         finally:
             self.__meta.locked = False
             self.__meta.changes = None
+            self.__need_attr = False
             self.__meta.lock_id = 0
             self._lock.release()
             self._table.locked_objs.discard(self)
@@ -499,6 +510,6 @@ class CustomType:
     _field = None
 
     def __setattr__(self, key, value):
-        super().__setattr__(key, value)
+        object.__setattr__(self, key, value)
         if self._parent and self._field and key[0] != "_":
             setattr(self._parent, self._field, self)
