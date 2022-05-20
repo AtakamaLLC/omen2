@@ -103,11 +103,13 @@ def test_ver_swap():
 
     f1 = omen2.__file__
     with swap_version("1.4.3"):
+        import omen2
         assert omen2.__file__ != f1
 
 
 def test_perf_attr():
     def init():
+        import omen2
         import tests.schema
 
         importlib.reload(tests.schema)
