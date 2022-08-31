@@ -28,8 +28,6 @@ class Omen(abc.ABC):
 
     # pylint: disable=protected-access
 
-    # abstract classes often do this, so # pylint: disable=no-self-use
-
     version: Optional[int] = None
     model: DbModel = None
     table_types: Dict[str, Type["Table"]] = None
