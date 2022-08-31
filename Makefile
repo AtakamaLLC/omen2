@@ -4,7 +4,7 @@ env:
 	python -mvirtualenv env
 
 requirements:
-	pip install -r requirements.txt
+	python -mpip install -r requirements.txt
 
 lint:
 	python -m pylint omen2
@@ -17,7 +17,9 @@ black:
 	black omen2 tests
 
 test:
-	pytest -n=3 --cov omen2 -v tests
+	pytest -n=3 --cov omen2 -v tests -k "not perf"
+	# parallel testing of perf tests doesn't work
+	pytest --cov omen2 --cov-append -v tests -k "perf"
 
 publish:
 	rm -rf dist

@@ -1186,3 +1186,22 @@ def test_cache_sharing_threaded():
     pool = ThreadPool(num_t)
     pool.map(update_stuff, range(num_t))
     assert cache.select_one(id=12).gas_level == num_t
+
+
+def test_lenny_table():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    db.insert("cars", id=12, gas_level=0, color="green")
+    len_hit = False
+
+    class Lenny(Cars):
+        def __len__(self):
+            nonlocal len_hit
+            len_hit = True
+            assert False, "wtf!"
+
+    mgr.cars = Lenny(mgr)
+    mgr.cars.add(Car(color="red", gas_level=0.3))
+    assert mgr.cars.select_one(id=12)
+    assert mgr.cars.select_one(color="red")
+    assert not len_hit
