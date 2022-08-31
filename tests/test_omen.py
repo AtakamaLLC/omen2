@@ -1171,20 +1171,26 @@ def test_cache_sharing_threaded():
     assert mgr.cars.select_one(id=12)
     assert cache.select_one(id=12)
 
+    threadlog = []
     # all threads update gas_level of cached car, only the first thread reloads the cache
     def update_stuff(_i):
+        nonlocal threadlog
         if _i == 0:
+            # this test also checks that the reload can happen while objects are being updated
             cache.reload()
 
         # if the cache was cleared in in another thread, this returns None (behavior we want to avoid)
         c = cache.select_one(id=12)
         assert c
         with c:
+            threadlog.append([threading.get_ident(), id(c), c.gas_level])
             c.gas_level += 1
 
-    num_t = 10
+    num_t = 20
     pool = ThreadPool(num_t)
     pool.map(update_stuff, range(num_t))
+    # this was useful for debugging
+    log.debug("thread log: %s:", "\n".join(str(e) for e in threadlog))
     assert cache.select_one(id=12).gas_level == num_t
 
 
