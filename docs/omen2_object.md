@@ -12,7 +12,7 @@ Derive from this type so that track-changes works with your custom object.
 Object base class, from which all objects are derived.
 
 
-#### .__init__(self, **kws)
+#### .\_\_init\_\_(self, **kws)
 Override this to control initialization, generally calling it *after* you do your own init.
 
 

@@ -299,4 +299,5 @@ class ObjCache(Selectable[T]):
 
     def reload(self):
         """Reload the objects in the cache from the db."""
-        return sum(1 for _ in self.table.select())
+        with self.table.lock:
+            return sum(1 for _ in self.table.select())
