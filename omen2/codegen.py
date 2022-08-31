@@ -30,8 +30,8 @@ class CodeGen:
         if self.module == "__main__":
             self.module, _ = os.path.splitext(
                 os.path.basename(
-                    sys.modules["__main__"].__file__
-                )  # pylint: disable=no-member
+                    sys.modules["__main__"].__file__  # pylint: disable=no-member
+                )
             )
         self.base_cls = class_type or self.import_mod()
         self.model = self.base_cls.model
