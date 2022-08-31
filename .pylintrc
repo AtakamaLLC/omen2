@@ -41,6 +41,7 @@ disable=multiple-imports,
         no-else-raise,
         line-too-long,
         too-few-public-methods,
+        no-self-use,
         no-else-return,
         missing-final-newline,
         len-as-condition,               # change this at your peril!, len!=0 is not the same as truthy for all sequences!

@@ -272,7 +272,7 @@ class Table(Selectable[T]):
         assert self._in_tx()
         objs = self._tx_objs[threading.get_ident()]
         if obj not in objs:
-            obj.__enter__()  # pylint: disable=unnecessary-dunder-call
+            obj.__enter__()
             objs[obj] = TxStatus.UPDATE
 
 
