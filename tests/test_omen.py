@@ -1204,4 +1204,7 @@ def test_lenny_table():
     mgr.cars.add(Car(color="red", gas_level=0.3))
     assert mgr.cars.select_one(id=12)
     assert mgr.cars.select_one(color="red")
+    car = mgr.cars.select_one(id=12)
+    with car:
+        car.gas_level = 0.1
     assert not len_hit
