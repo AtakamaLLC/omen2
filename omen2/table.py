@@ -176,7 +176,7 @@ class Table(Selectable[T]):
                 if status and status != TxStatus.UPDATE:
                     continue
             if cached:
-                if obj._to_db() != cached._to_db():
+                if not obj._is_locked() and obj._to_db() != cached._to_db():
                     log.debug("updating %s from db", repr(obj))
                     cached._update_from_object(obj)
                 obj = cached
