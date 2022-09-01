@@ -1204,14 +1204,13 @@ def test_update_threaded(tmp_path):
     assert mgr.cars.select_one(id=12)
 
     threadlog = []
-    # all threads update gas_level of cached car, only the first thread reloads the cache
+
     def update_stuff(_i):
         nonlocal threadlog, lock_cnt
-        # if the cache was cleared in in another thread, this returns None (behavior we want to avoid)
         c = mgr.cars.select_one(id=12)
         assert c
         with c:
-            # this is perfectly serial
+            # check if really locked/serial
             lc = lock_cnt
             threadlog.append(
                 [1, time.monotonic(), threading.get_ident(), id(c), c.gas_level]
@@ -1222,7 +1221,6 @@ def test_update_threaded(tmp_path):
     num_t = 20
     pool = ThreadPool(num_t)
     pool.map(update_stuff, range(num_t))
-    # this was useful for debugging
     log.debug("thread %s log: %s:", lock_cnt, "\n".join(str(e) for e in threadlog))
     assert mgr.cars.select_one(id=12).gas_level == num_t
     assert lock_cnt == num_t
