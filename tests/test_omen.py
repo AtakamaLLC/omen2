@@ -1200,10 +1200,10 @@ def test_update_threaded(tmp_path):
     mgr = MyOmen(db)
     mgr.cars = Cars(mgr)
     db.insert("cars", id=12, gas_level=0, color="green")
+    lock_cnt = 0
     assert mgr.cars.select_one(id=12)
 
     threadlog = []
-    lock_cnt = 0
     # all threads update gas_level of cached car, only the first thread reloads the cache
     def update_stuff(_i):
         nonlocal threadlog, lock_cnt
@@ -1213,15 +1213,11 @@ def test_update_threaded(tmp_path):
         with c:
             # this is perfectly serial
             lc = lock_cnt
-            time.sleep(0.00001)
             threadlog.append(
                 [1, time.monotonic(), threading.get_ident(), id(c), c.gas_level]
             )
             c.gas_level += 1
             lock_cnt = lc + 1
-            threadlog.append(
-                [2, time.monotonic(), threading.get_ident(), id(c), c.gas_level]
-            )
 
     num_t = 20
     pool = ThreadPool(num_t)
@@ -1229,6 +1225,7 @@ def test_update_threaded(tmp_path):
     # this was useful for debugging
     log.debug("thread %s log: %s:", lock_cnt, "\n".join(str(e) for e in threadlog))
     assert mgr.cars.select_one(id=12).gas_level == num_t
+    assert lock_cnt == num_t
 
 
 def test_lenny_table():
