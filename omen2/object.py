@@ -460,6 +460,9 @@ class ObjBase:
         self.__meta.new = False
         self._save_pk()
 
+    def _is_locked(self):
+        return self.__meta.locked
+
     def __enter__(self):
         """Lock for write, and trigger thread-isolation."""
         if self.__meta and self.__meta.table is not None:
