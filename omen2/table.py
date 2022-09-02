@@ -178,7 +178,7 @@ class Table(Selectable[T]):
                 cached: "ObjBase" = self._cache.get(pk)
                 if cached:
                     if not cached._is_locked() and obj._to_db() != cached._to_db():
-                        log.debug("updating %s from db", repr(obj))
+                        log.debug("updating %r from db", obj)
                         cached._update_from_object(obj)
                     obj = cached
                 else:
