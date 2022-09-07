@@ -7,16 +7,16 @@ Generic selectable support for tables, relations and m2mhelpers.
 Generic selectable base class.
 
 
-#### .count(self, _where={}, **kws) -> int
+#### .count(self, \_where={}, **kws) -> int
 Return count of objs matchig where clause.  Override for efficiency.
 
-#### .get(self, _id=None, _default=None, **kws) -> Union[~T, NoneType]
+#### .get(self, \_id=None, \_default=None, **kws) -> Union[~T, NoneType]
 Shortcut method, you can access object by a single pk/positional id.
 
-#### .select(self, _where={}, **kws) -> Iterable[~T]
+#### .select(self, \_where={}, **kws) -> Iterable[~T]
 Read objects of specified class.
 
-#### .select_one(self, _where={}, **kws) -> Union[~T, NoneType]
+#### .select\_one(self, \_where={}, **kws) -> Union[~T, NoneType]
 Return one row, None, or raises an OmenMoreThanOneError.
 
 

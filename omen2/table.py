@@ -168,21 +168,22 @@ class Table(Selectable[T]):
         for row in self.db_select_gen(db_where, order_by=_order_by):
             obj = self.row_type._from_db_not_new(row._asdict())
             pk = obj._to_pk_tuple()
-            cached: "ObjBase" = self._cache.get(pk)
             db_pks.add(pk)
             if self._in_tx():
                 tid = threading.get_ident()
                 status = self._tx_objs[tid].get(obj, None)
                 if status and status != TxStatus.UPDATE:
                     continue
-            if cached:
-                if obj._to_db() != cached._to_db():
-                    log.debug("updating %s from db", repr(obj))
-                    cached._update_from_object(obj)
-                obj = cached
-            else:
-                obj._bind(table=self)
-                self._add_cache(obj)
+            with self.lock:
+                cached: "ObjBase" = self._cache.get(pk)
+                if cached:
+                    if not cached._is_locked() and obj._to_db() != cached._to_db():
+                        log.debug("updating %r from db", obj)
+                        cached._update_from_object(obj)
+                    obj = cached
+                else:
+                    obj._bind(table=self)
+                    self._add_cache(obj)
             if obj._matches(attr_where):
                 yield obj
 
@@ -299,4 +300,5 @@ class ObjCache(Selectable[T]):
 
     def reload(self):
         """Reload the objects in the cache from the db."""
-        return sum(1 for _ in self.table.select())
+        with self.table.lock:
+            return sum(1 for _ in self.table.select())

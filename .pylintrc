@@ -39,9 +39,9 @@ disable=multiple-imports,
         trailing-newlines,
         unidiomatic-typecheck,
         no-else-raise,
-        bad-continuation,
         line-too-long,
         too-few-public-methods,
+        no-self-use,
         no-else-return,
         missing-final-newline,
         len-as-condition,               # change this at your peril!, len!=0 is not the same as truthy for all sequences!
@@ -235,13 +235,6 @@ max-line-length=160
 
 # Maximum number of lines in a module
 max-module-lines=1000
-
-# List of optional constructs for which whitespace checking is disabled. `dict-
-# separator` is used to allow tabulation in dicts, etc.: {1  : 1,\n222: 2}.
-# `trailing-comma` allows a space between comma and closing bracket: (a, ).
-# `empty-line` allows space-only lines.
-no-space-check=trailing-comma,
-               dict-separator
 
 # Allow the body of a class to be on the same line as the declaration if body
 # contains single statement.

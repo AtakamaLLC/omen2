@@ -155,7 +155,7 @@ class ObjBase:
     @property
     def _is_bound(self) -> bool:
         # important to cast this for better errors
-        return bool(self.__meta and self.__meta.table)
+        return bool(self.__meta and self.__meta.table is not None)
 
     @property
     def _is_new(self) -> bool:
@@ -337,15 +337,18 @@ class ObjBase:
 
         if self.__meta and not self.__meta.suppress_set_changes:
             if (
-                self.__meta.table
+                self.__meta.table is not None
                 and self.__meta.table._in_tx()
                 and not self.__meta.locked
             ):
                 self.__meta.table._add_object_to_tx(self)
 
-            if self.__meta.table and not self.__meta.locked:
+            if self.__meta.table is not None and not self.__meta.locked:
                 raise OmenUseWithError("use with: protocol for bound objects")
-            if self.__meta.table and self.__meta.lock_id != threading.get_ident():
+            if (
+                self.__meta.table is not None
+                and self.__meta.lock_id != threading.get_ident()
+            ):
                 raise OmenUseWithError("use with: protocol for bound objects")
 
         if self._is_bound and not self.__meta.suppress_set_changes:
@@ -440,7 +443,7 @@ class ObjBase:
             for obj in objs:
                 rel.remove(obj)
 
-        if self.__meta.table:
+        if self.__meta.table is not None:
             table = self.__meta.table
             table._db_remove(self)
 
@@ -457,9 +460,12 @@ class ObjBase:
         self.__meta.new = False
         self._save_pk()
 
+    def _is_locked(self):
+        return self.__meta.locked
+
     def __enter__(self):
         """Lock for write, and trigger thread-isolation."""
-        if self.__meta and self.__meta.table:
+        if self.__meta and self.__meta.table is not None:
             with self._table.lock:
                 if not self._lock.acquire(timeout=VERY_LARGE_LOCK_TIMEOUT):
                     log.critical("deadlock prevented", stack_info=True)
