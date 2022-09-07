@@ -7,14 +7,14 @@ Omen2: generate python code from a database schema.
 Generate code from a database schema.
 
 
-#### .\_\_init\_\_(self, module\_path, class\_type=None)
+#### .__init__(self, module_path, class_type=None)
 Create an omen2 codegen object.
 
 Args:
     module_path: package.module.ClassName
 
 
-#### .gen\_class(out, name, dbtab:'DbTable')
+#### .gen_class(out, name, dbtab:'DbTable')
 Generate the derived classes for a single DBTable
 
 Args:
@@ -34,31 +34,31 @@ Example:
 
 
 
-#### .gen\_import(out)
+#### .gen_import(out)
 Generate import statements.
 
-#### .gen\_monolith(self, out)
+#### .gen_monolith(self, out)
 Generates a single, monolithic file with all classes in one file.
 
-#### .generate\_from\_class(class\_type, out\_path=None)
+#### .generate_from_class(class_type, out_path=None)
 Given a class derived from omen2.Omen, generate omen2 code.
 
-#### .generate\_from\_path(class\_path, class\_type=None, out\_path=None)
+#### .generate_from_path(class_path, class_type=None, out_path=None)
 Given a dotted python path name, generate omen2 code.
 
-#### .import\_generated(self, out\_path)
+#### .import_generated(self, out_path)
 Import the module this codegen generated.
 
-#### .import\_mod(self)
+#### .import_mod(self)
 Import the module this codegen will be running on.
 
-#### .output\_path(self)
+#### .output_path(self)
 Get the codegen output path.
 
 Example: <module-path>_gen.py
 
 
-#### .parse\_class\_path(path)
+#### .parse_class_path(path)
 Parse the package.module.ClassName path.
 
 

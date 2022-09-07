@@ -10,7 +10,7 @@ Omen2 object cache: same interface as table, but all objects are preloaded.
 #### .reload(self)
 Reload the objects in the cache from the db.
 
-#### .select(self, \_where={}, **kws) -> Iterable[~T]
+#### .select(self, _where={}, **kws) -> Iterable[~T]
 Read objects from the cache.
 
 
@@ -18,22 +18,22 @@ Read objects from the cache.
 Omen2: Table base class from which tables are derived.
 
 
-#### .\_\_init\_\_(self, mgr:'Omen')
+#### .__init__(self, mgr:'Omen')
 Bind table to omen manager.
 
 #### .add(self, obj:~U) -> ~U
 Insert an object into the db
 
-#### .count(self, \_where={}, **kws) -> int
+#### .count(self, _where={}, **kws) -> int
 Return count of objs matching where clause.
 
-#### .db\_insert(self, obj:~T, id\_field)
+#### .db_insert(self, obj:~T, id_field)
 Update the db + cache from object.
 
-#### .db\_select(self, where)
+#### .db_select(self, where)
 Call select on the underlying db, given a where dict of keys/values.
 
-#### .db\_select\_gen(self, where, order\_by=None)
+#### .db_select_gen(self, where, order_by=None)
 Call select_gen on the underlying db, given a where dict of keys/values.
 
 #### .new(self, *a, **kw) -> ~T
@@ -42,7 +42,7 @@ Convenience function to create a new row and add it to the db.
 #### .remove(self, obj:'ObjBase'=None, **kws)
 Remove an object from the db.
 
-#### .select(self, \_where={}, \_order\_by=None, **kws) -> Iterable[~T]
+#### .select(self, _where={}, _order_by=None, **kws) -> Iterable[~T]
 Read objects of specified class.
 
 Specify _order_by="field" or ["field1 desc", "field2"] to sort the results.
