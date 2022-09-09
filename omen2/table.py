@@ -120,10 +120,18 @@ class Table(Selectable[T]):
     def update(self, obj: T, keys: Iterable[str]):
         """Add object to db + cache"""
         vals = obj._to_db(keys)
-        if obj._saved_pk:
-            self.db.upsert(self.table_name, obj._saved_pk, **vals)
+        if obj._is_new:
+            # new == upsert
+            if obj._saved_pk:
+                self.db.upsert(self.table_name, obj._saved_pk, **vals)
+            else:
+                self.db.upsert(self.table_name, **vals)
         else:
-            self.db.upsert(self.table_name, **vals)
+            # existing == update only (don't insert)
+            if obj._saved_pk:
+                self.db.update(self.table_name, obj._saved_pk, **vals)
+            else:
+                self.db.update(self.table_name, **vals)
         self._add_cache(obj)
 
     def _add_cache(self, obj: T):

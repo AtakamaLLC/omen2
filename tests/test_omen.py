@@ -1246,3 +1246,16 @@ def test_lenny_table():
     with car:
         car.gas_level = 0.1
     assert not len_hit
+
+
+def test_no_upsert_on_existing():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    db.insert("cars", id=12, gas_level=0, color="green")
+    mgr.cars = Cars(mgr)
+    car = mgr.cars.select_one(id=12)
+    db.delete("cars", id=12)
+    # this should not insert
+    with car:
+        car.gas_level = 5
+    assert not mgr.cars.select_one(id=12)
