@@ -123,6 +123,7 @@ class ObjBase:
         ret = cls._from_db(dct)
         ret._link_custom_types()
         ret.__meta.new = False
+        # all db-bound objects have a saved pk
         ret._save_pk()
         return ret
 
@@ -455,6 +456,7 @@ class ObjBase:
         if need_id_field or self.__meta.new:
             table.db_insert(self, need_id_field)
         elif keys:
+            # update bound object
             table.update(self, keys)
 
         self.__meta.new = False
