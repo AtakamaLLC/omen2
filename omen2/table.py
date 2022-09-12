@@ -118,12 +118,10 @@ class Table(Selectable[T]):
         self.db.delete(self.table_name, **vals)
 
     def update(self, obj: T, keys: Iterable[str]):
-        """Add object to db + cache"""
+        """Update objectdb + cache"""
+        # called from table.py when a bound object is modified
         vals = obj._to_db(keys)
-        if obj._saved_pk:
-            self.db.upsert(self.table_name, obj._saved_pk, **vals)
-        else:
-            self.db.upsert(self.table_name, **vals)
+        self.db.update(self.table_name, obj._saved_pk, **vals)
         self._add_cache(obj)
 
     def _add_cache(self, obj: T):
