@@ -185,9 +185,10 @@ def test_remove_all():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db, cars=Cars)
     mgr.cars = mgr[Cars]
-    car1 = mgr.cars.add(Car(gas_level=1))
-    car2 = mgr.cars.add(Car(gas_level=2))
-    car3 = mgr.cars.add(Car(gas_level=2))
+
+    mgr.cars.add(Car(gas_level=1))
+    mgr.cars.add(Car(gas_level=2))
+    mgr.cars.add(Car(gas_level=2))
 
     assert len(mgr.cars) == 3
 
@@ -198,6 +199,35 @@ def test_remove_all():
     assert len(mgr.cars._cache) == 1
 
     assert len(mgr.cars) == 1
+
+    mgr.cars.add(Car(gas_level=2))
+    mgr.cars.add(Car(gas_level=2))
+
+    assert len(mgr.cars) == 3
+
+    # remove in tx
+    with mgr.transaction():
+        mgr.cars.remove_all(gas_level=2)
+
+    # cache is cleaned up
+    assert len(mgr.cars._cache) == 1
+    assert len(mgr.cars) == 1
+
+    mgr.cars.add(Car(gas_level=2))
+    mgr.cars.add(Car(gas_level=2))
+
+    assert len(mgr.cars) == 3
+
+    # remove in tx
+    try:
+        with mgr.transaction():
+            mgr.cars.remove_all(gas_level=2)
+            raise ValueError
+    except ValueError:
+        pass
+
+    # rollback remove-all
+    assert len(mgr.cars) == 3
 
 
 def test_bigtx_rollback():
