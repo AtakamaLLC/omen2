@@ -52,7 +52,7 @@ Specify _order_by="field" or ["field1 desc", "field2"] to sort the results.
 Use in a with block to enter a transaction on this table only.
 
 #### .update(self, obj:~T, keys:Iterable[str])
-Add object to db + cache
+Update objectdb + cache
 
 
 ## TxStatus(Enum)

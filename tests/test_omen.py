@@ -160,6 +160,35 @@ def test_rollback():
     assert car.gas_level == 2
 
 
+def test_different_removes():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+    car3 = mgr.cars.add(Car(gas_level=3))
+
+    assert len(mgr.cars) == 3
+
+    # remove by obj
+    mgr.cars.remove(car1)
+
+    assert len(mgr.cars) == 2
+
+    # remove by id
+    mgr.cars.remove(car2.id)
+
+    # remove ignored if there already
+    mgr.cars.remove(car1.id)
+
+    assert len(mgr.cars) == 1
+
+    # remove by kws
+    mgr.cars.remove(gas_level=3)
+
+    assert len(mgr.cars) == 0
+
+
 def test_bigtx_rollback():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db, cars=Cars)

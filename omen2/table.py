@@ -13,11 +13,11 @@ from .errors import OmenNoPkError, OmenRollbackError, IntegrityError
 import logging as log
 
 from .selectable import Selectable
+from .object import ObjBase
 
 if TYPE_CHECKING:
     from notanorm import DbBase
     from .omen import Omen
-    from .object import ObjBase
 
 T = TypeVar("T", bound="ObjBase")
 U = TypeVar("U", bound="ObjBase")
@@ -98,6 +98,10 @@ class Table(Selectable[T]):
                 log.debug("not removing obj, because it is None")
                 return
             obj = self.select_one(**kws)
+        elif not isinstance(obj, ObjBase):
+            # allow table.remove(single_column_object_id)
+            pk = obj
+            obj = self.get(pk)
         if not obj or not obj._is_bound:
             log.debug("not removing object that isn't in the db")
             return
