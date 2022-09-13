@@ -175,18 +175,29 @@ def test_different_removes():
 
     assert len(mgr.cars) == 2
 
-    # remove by id
-    mgr.cars.remove(car2.id)
-
-    # remove ignored if there already
-    mgr.cars.remove(car1.id)
-
-    assert len(mgr.cars) == 1
-
     # remove by kws
     mgr.cars.remove(gas_level=3)
 
-    assert len(mgr.cars) == 0
+    assert len(mgr.cars) == 1
+
+
+def test_remove_all():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car1 = mgr.cars.add(Car(gas_level=1))
+    car2 = mgr.cars.add(Car(gas_level=2))
+    car3 = mgr.cars.add(Car(gas_level=2))
+
+    assert len(mgr.cars) == 3
+
+    # remove by kws
+    mgr.cars.remove_all(gas_level=2)
+
+    # cache is cleaned up
+    assert len(mgr.cars._cache) == 1
+
+    assert len(mgr.cars) == 1
 
 
 def test_bigtx_rollback():

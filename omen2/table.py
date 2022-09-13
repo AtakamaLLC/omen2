@@ -13,11 +13,11 @@ from .errors import OmenNoPkError, OmenRollbackError, IntegrityError
 import logging as log
 
 from .selectable import Selectable
-from .object import ObjBase
 
 if TYPE_CHECKING:
     from notanorm import DbBase
     from .omen import Omen
+    from .object import ObjBase
 
 T = TypeVar("T", bound="ObjBase")
 U = TypeVar("U", bound="ObjBase")
@@ -98,15 +98,26 @@ class Table(Selectable[T]):
                 log.debug("not removing obj, because it is None")
                 return
             obj = self.select_one(**kws)
-        elif not isinstance(obj, ObjBase):
-            # allow table.remove(single_column_object_id)
-            pk = obj
-            obj = self.get(pk)
+
         if not obj or not obj._is_bound:
             log.debug("not removing object that isn't in the db")
             return
         assert obj._table is self
         obj._remove()
+
+    def remove_all(self, **kws):
+        """Remove all matching objects from the db."""
+        if self._in_tx():
+            for obj in self.select(**kws):
+                self._db_remove(obj)
+        else:
+            self.db.delete(self.table_name, **kws)
+            pop = []
+            for obj in self._cache.values():
+                if obj._matches(kws):
+                    pop.append(obj._to_pk_tuple())
+            for ent in pop:
+                self._cache.pop(ent)
 
     def _db_remove(self, obj: "ObjBase"):
         """Remove an object from the db, without cascading."""
@@ -122,7 +133,7 @@ class Table(Selectable[T]):
         self.db.delete(self.table_name, **vals)
 
     def update(self, obj: T, keys: Iterable[str]):
-        """Update objectdb + cache"""
+        """Update object db + cache"""
         # called from table.py when a bound object is modified
         vals = obj._to_db(keys)
         self.db.update(self.table_name, obj._saved_pk, **vals)

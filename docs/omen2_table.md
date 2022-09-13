@@ -42,6 +42,9 @@ Convenience function to create a new row and add it to the db.
 #### .remove(self, obj:'ObjBase'=None, **kws)
 Remove an object from the db.
 
+#### .remove\_all(self, **kws)
+Remove all matching objects from the db.
+
 #### .select(self, \_where={}, \_order\_by=None, **kws) -> Iterable[~T]
 Read objects of specified class.
 
@@ -52,7 +55,7 @@ Specify _order_by="field" or ["field1 desc", "field2"] to sort the results.
 Use in a with block to enter a transaction on this table only.
 
 #### .update(self, obj:~T, keys:Iterable[str])
-Update objectdb + cache
+Update object db + cache
 
 
 ## TxStatus(Enum)
