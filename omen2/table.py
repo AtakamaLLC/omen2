@@ -91,6 +91,7 @@ class Table(Selectable[T]):
         """
         if a and isinstance(a[0], ObjBase):
             obj = a[0]
+            assert len(a) == 1, "only one object allowed"
             assert not kw, "cannot mix kw and obj upsert"
         else:
             obj = self.row_type(*a, **kw)

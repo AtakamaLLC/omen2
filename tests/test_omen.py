@@ -1267,7 +1267,7 @@ def test_explicit_upsert():
     mgr.cars = Cars(mgr)
 
     # simple object-level upsert
-    mgr.cars.upsert(Car(id=12, color="red", gas_level=0.3))
+    car1 = mgr.cars.upsert(Car(id=12, color="red", gas_level=0.3))
     assert mgr.cars.select_one(id=12).color == "red"
     mgr.cars.upsert(Car(id=12, gas_level=0.4))
     # defaults are copied in
@@ -1275,9 +1275,16 @@ def test_explicit_upsert():
     assert mgr.cars.select_one(id=12).gas_level == 0.4
 
     # complex object-level upsert
-    mgr.cars.upsert(Car(id=13, color="red", gas_level=0.3))
+    car2 = mgr.cars.upsert(Car(id=13, color="red", gas_level=0.3))
     mgr.cars.upsert(id=13, gas_level=0.5)
 
     # no affect on color
     assert mgr.cars.select_one(id=13).color == "red"
     assert mgr.cars.select_one(id=13).gas_level == 0.5
+
+    # invalid syntax
+    with pytest.raises(AssertionError):
+        mgr.cars.upsert(car1, car2)
+
+    with pytest.raises(AssertionError):
+        mgr.cars.upsert(car1, gas_level=0.5)

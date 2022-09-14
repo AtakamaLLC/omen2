@@ -469,20 +469,6 @@ class ObjBase:
         self.__meta.new = False
         self._save_pk()
 
-    def _upsert(self, keys: Iterable[str]):
-        """Save myself to my table."""
-
-        need_id_field = self._need_id()
-        table = self.__meta.table
-        if need_id_field or self.__meta.new:
-            table.db_insert(self, need_id_field)
-        elif keys:
-            # update bound object
-            table.update(self, keys)
-
-        self.__meta.new = False
-        self._save_pk()
-
     def _is_locked(self):
         return self.__meta.locked
 
