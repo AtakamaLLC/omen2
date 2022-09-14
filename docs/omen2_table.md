@@ -21,7 +21,7 @@ Omen2: Table base class from which tables are derived.
 #### .\_\_init\_\_(self, mgr:'Omen')
 Bind table to omen manager.
 
-#### .add(self, obj:~U) -> ~U
+#### .add(self, obj:~U, \_upsert:bool=False, \_upfds=None) -> ~U
 Insert an object into the db
 
 #### .count(self, \_where={}, **kws) -> int
@@ -36,7 +36,10 @@ Call select on the underlying db, given a where dict of keys/values.
 #### .db\_select\_gen(self, where, order\_by=None)
 Call select_gen on the underlying db, given a where dict of keys/values.
 
-#### .new(self, *a, **kw) -> ~T
+#### .db\_upsert(self, obj:~T, id\_field, up\_fds)
+Upsert the db + cache from object.
+
+#### .new(self, *a, \_upsert:bool=False, **kw) -> ~T
 Convenience function to create a new row and add it to the db.
 
 #### .remove(self, obj:'ObjBase'=None, **kws)
@@ -52,7 +55,20 @@ Specify _order_by="field" or ["field1 desc", "field2"] to sort the results.
 Use in a with block to enter a transaction on this table only.
 
 #### .update(self, obj:~T, keys:Iterable[str])
-Add object to db + cache
+Update objectdb + cache
+
+#### .upsert(self, *a, **kw) -> ~T
+Update row in db if present, otherwise, insert row.
+
+table.upsert(Object(...))
+
+or
+
+table.upsert(key2=val1, key2=val2)
+
+Note: If using the keyword-version of this function, all values that
+      are not indicated by the keywords will retain the values of the existing row.
+
 
 
 ## TxStatus(Enum)
