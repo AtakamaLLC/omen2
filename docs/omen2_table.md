@@ -21,7 +21,7 @@ Omen2: Table base class from which tables are derived.
 #### .\_\_init\_\_(self, mgr:'Omen')
 Bind table to omen manager.
 
-#### .add(self, obj:~U, \_upsert:bool=False, \_upfds=None) -> ~U
+#### .add(self, obj:~U) -> ~U
 Insert an object into the db
 
 #### .count(self, \_where={}, **kws) -> int
@@ -39,8 +39,12 @@ Call select_gen on the underlying db, given a where dict of keys/values.
 #### .db\_upsert(self, obj:~T, id\_field, up\_fds)
 Upsert the db + cache from object.
 
-#### .new(self, *a, \_upsert:bool=False, **kw) -> ~T
+#### .new(self, *a, **kw) -> ~T
 Convenience function to create a new row and add it to the db.
+
+Equivalent to: table.add(Object(*a, **kw))
+
+
 
 #### .remove(self, obj:'ObjBase'=None, **kws)
 Remove an object from the db.

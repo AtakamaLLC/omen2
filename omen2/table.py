@@ -68,10 +68,14 @@ class Table(Selectable[T]):
         return self.manager.db
 
     # noinspection PyCallingNonCallable
-    def new(self, *a, _upsert: bool = False, **kw) -> T:
-        """Convenience function to create a new row and add it to the db."""
+    def new(self, *a, **kw) -> T:
+        """Convenience function to create a new row and add it to the db.
+
+        Equivalent to: table.add(Object(*a, **kw))
+
+        """
         obj = self.row_type(*a, **kw)
-        return self.add(obj, _upsert=_upsert)
+        return self.add(obj)
 
     def upsert(self, *a, **kw) -> T:
         """Update row in db if present, otherwise, insert row.
@@ -91,10 +95,13 @@ class Table(Selectable[T]):
         else:
             obj = self.row_type(*a, **kw)
             obj._set_up_fds(kw.keys())
-        return self.add(obj, _upsert=True)
+        return self._add(obj, upsert=True)
 
-    def add(self, obj: U, _upsert: bool = False, _upfds=None) -> U:
+    def add(self, obj: U) -> U:
         """Insert an object into the db"""
+        self._add(obj, upsert=False)
+
+    def _add(self, obj: U, upsert: bool) -> U:
         if self._in_tx():
             tid = threading.get_ident()
             if obj in self._tx_objs[tid]:
@@ -102,14 +109,14 @@ class Table(Selectable[T]):
                     if obj == sub:
                         if id(obj) != id(sub):
                             raise IntegrityError
-            if _upsert:
+            if upsert:
                 op = TxStatus.UPSERT
             else:
                 op = TxStatus.ADD
             self._tx_objs[tid][obj] = op
             return obj
         else:
-            return self._notx_add(obj, _upsert)
+            return self._notx_add(obj, upsert)
 
     def _notx_add(self, obj: U, upsert: bool = False) -> U:
         obj._bind(table=self)
