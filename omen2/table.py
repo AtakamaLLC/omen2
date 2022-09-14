@@ -100,7 +100,7 @@ class Table(Selectable[T]):
 
     def add(self, obj: U) -> U:
         """Insert an object into the db"""
-        self._add(obj, upsert=False)
+        return self._add(obj, upsert=False)
 
     def _add(self, obj: U, upsert: bool) -> U:
         if self._in_tx():
