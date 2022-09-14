@@ -89,7 +89,8 @@ class Table(Selectable[T]):
             obj = a[0]
             assert not kw, "cannot mix kw and obj upsert"
         else:
-            obj = self.row_type(*a, **kw, _up_fds=kw.keys())
+            obj = self.row_type(*a, **kw)
+            obj._set_up_fds(kw.keys())
         return self.add(obj, _upsert=True)
 
     def add(self, obj: U, _upsert: bool = False, _upfds=None) -> U:
