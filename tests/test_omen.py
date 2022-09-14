@@ -186,9 +186,9 @@ def test_remove_all():
     mgr = MyOmen(db, cars=Cars)
     mgr.cars = mgr[Cars]
 
-    mgr.cars.add(Car(gas_level=1))
-    mgr.cars.add(Car(gas_level=2))
-    mgr.cars.add(Car(gas_level=2))
+    c1 = mgr.cars.add(Car(gas_level=1))
+    c2 = mgr.cars.add(Car(gas_level=2))
+    c3 = mgr.cars.add(Car(gas_level=2))
 
     assert len(mgr.cars) == 3
 
@@ -213,8 +213,8 @@ def test_remove_all():
     assert len(mgr.cars._cache) == 1
     assert len(mgr.cars) == 1
 
-    mgr.cars.add(Car(gas_level=2))
-    mgr.cars.add(Car(gas_level=2))
+    c2 = mgr.cars.add(Car(gas_level=2))
+    c3 = mgr.cars.add(Car(gas_level=2))
 
     assert len(mgr.cars) == 3
 
