@@ -140,6 +140,14 @@ def test_threaded():
     assert mgr.db.select_one("cars", id=car.id).gas_level == num_t
 
 
+def test_upsert_adds_ids():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car = mgr.cars.upsert(Car(gas_level=2))
+    assert car.id
+
+
 def test_rollback():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db, cars=Cars)
@@ -1329,3 +1337,79 @@ def test_no_upsert_on_existing():
     with car:
         car.gas_level = 5
     assert not mgr.cars.select_one(id=12)
+
+
+def test_explicit_upsert():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+
+    # simple object-level upsert
+    car1 = mgr.cars.upsert(Car(id=12, color="red", gas_level=0.3))
+    assert mgr.cars.select_one(id=12).color == "red"
+    mgr.cars.upsert(Car(id=12, gas_level=0.4))
+    # defaults are copied in
+    assert mgr.cars.select_one(id=12).color == "black"
+    assert mgr.cars.select_one(id=12).gas_level == 0.4
+
+    # complex object-level upsert
+    car2 = mgr.cars.upsert(Car(id=13, color="red", gas_level=0.3))
+    mgr.cars.upsert(id=13, gas_level=0.5)
+
+    # no affect on color
+    assert mgr.cars.select_one(id=13).color == "red"
+    assert mgr.cars.select_one(id=13).gas_level == 0.5
+
+    # invalid syntax
+    with pytest.raises(AssertionError):
+        mgr.cars.upsert(car1, car2)
+
+    with pytest.raises(AssertionError):
+        mgr.cars.upsert(car1, gas_level=0.5)
+
+
+def test_upsert_in_tx():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+
+    # add obj
+    with mgr.transaction():
+        car0 = mgr.cars.upsert(Car(id=12, color="red", gas_level=0.3))
+        assert mgr.cars.select(id=12)
+        raise OmenRollbackError
+
+    assert not mgr.cars.select_one(id=12)
+
+    with mgr.transaction():
+        car1 = mgr.cars.upsert(Car(id=12, color="red", gas_level=0.3))
+        assert mgr.cars.select(id=12)
+
+    assert car0 is not car1
+
+    assert mgr.cars.select_one(id=12) is car1
+
+    # update by obj
+    with mgr.transaction():
+        mgr.cars.upsert(Car(id=12, color="green", gas_level=0.3))
+        raise OmenRollbackError
+
+    assert mgr.cars.select_one(id=12).color == "red"
+
+    with mgr.transaction():
+        mgr.cars.upsert(Car(id=12, color="green", gas_level=0.3))
+
+    assert mgr.cars.select_one(id=12).color == "green"
+
+    # update by field
+    with mgr.transaction():
+        mgr.cars.upsert(id=12, gas_level=0.4)
+        raise OmenRollbackError
+
+    assert mgr.cars.select_one(id=12).gas_level == 0.3
+
+    with mgr.transaction():
+        mgr.cars.upsert(id=12, gas_level=0.4)
+
+    assert mgr.cars.select_one(id=12).gas_level == 0.4
+    assert mgr.cars.select_one(id=12).color == "green"
