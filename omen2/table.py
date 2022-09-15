@@ -13,11 +13,11 @@ from .errors import OmenNoPkError, OmenRollbackError, IntegrityError
 import logging as log
 
 from .selectable import Selectable
+from .object import ObjBase
 
 if TYPE_CHECKING:
     from notanorm import DbBase
     from .omen import Omen
-    from .object import ObjBase
 
 T = TypeVar("T", bound="ObjBase")
 U = TypeVar("U", bound="ObjBase")
@@ -33,6 +33,7 @@ class TxStatus(Enum):
     UPDATE = 1
     ADD = 2
     REMOVE = 3
+    UPSERT = 4
 
 
 # noinspection PyDefaultArgument,PyProtectedMember
@@ -68,12 +69,40 @@ class Table(Selectable[T]):
 
     # noinspection PyCallingNonCallable
     def new(self, *a, **kw) -> T:
-        """Convenience function to create a new row and add it to the db."""
+        """Convenience function to create a new row and add it to the db.
+
+        Equivalent to: table.add(Object(*a, **kw))
+
+        """
         obj = self.row_type(*a, **kw)
         return self.add(obj)
 
+    def upsert(self, *a, **kw) -> T:
+        """Update row in db if present, otherwise, insert row.
+
+        table.upsert(Object(...))
+
+        or
+
+        table.upsert(key2=val1, key2=val2)
+
+        Note: If using the keyword-version of this function, all values that
+              are not indicated by the keywords will retain the values of the existing row.
+        """
+        if a and isinstance(a[0], ObjBase):
+            obj = a[0]
+            assert len(a) == 1, "only one object allowed"
+            assert not kw, "cannot mix kw and obj upsert"
+        else:
+            obj = self.row_type(*a, **kw)
+            obj._set_up_fds(kw.keys())
+        return self._add(obj, upsert=True)
+
     def add(self, obj: U) -> U:
         """Insert an object into the db"""
+        return self._add(obj, upsert=False)
+
+    def _add(self, obj: U, upsert: bool) -> U:
         if self._in_tx():
             tid = threading.get_ident()
             if obj in self._tx_objs[tid]:
@@ -81,14 +110,18 @@ class Table(Selectable[T]):
                     if obj == sub:
                         if id(obj) != id(sub):
                             raise IntegrityError
-            self._tx_objs[tid][obj] = TxStatus.ADD
+            if upsert:
+                op = TxStatus.UPSERT
+            else:
+                op = TxStatus.ADD
+            self._tx_objs[tid][obj] = op
             return obj
         else:
-            return self._notx_add(obj)
+            return self._notx_add(obj, upsert)
 
-    def _notx_add(self, obj: U) -> U:
+    def _notx_add(self, obj: U, upsert: bool = False) -> U:
         obj._bind(table=self)
-        obj._commit()
+        obj._commit(upsert=upsert)
         return obj
 
     def remove(self, obj: "ObjBase" = None, **kws):
@@ -142,6 +175,28 @@ class Table(Selectable[T]):
             obj.__dict__[id_field] = ret.lastrowid
         self._add_cache(obj)
 
+    def db_upsert(self, obj: T, id_field, up_fds):
+        """Upsert the db + cache from object."""
+        vals = obj._to_db()
+        insonly = {}
+
+        if up_fds:
+            newv = {}
+            for k, v in vals.items():
+                if k in up_fds:
+                    newv[k] = v
+                else:
+                    insonly[k] = v
+            vals = newv
+
+        ret = self.db.upsert(self.table_name, _insert_only=insonly, **vals)
+
+        # force id's in there
+        if id_field and hasattr(ret, "lastrowid"):
+            obj.__dict__[id_field] = ret.lastrowid
+
+        self._add_cache(obj)
+
     def db_select(self, where):
         """Call select on the underlying db, given a where dict of keys/values."""
         return self.db.select(self.table_name, None, where)
@@ -154,7 +209,7 @@ class Table(Selectable[T]):
         if self._in_tx():
             tid = threading.get_ident()
             for obj, status in self._tx_objs.get(tid, {}).items():
-                if status != TxStatus.ADD:
+                if status not in (TxStatus.ADD, TxStatus.UPSERT):
                     continue
                 if obj._matches(where):
                     yield obj
@@ -236,7 +291,9 @@ class Table(Selectable[T]):
                         if status == TxStatus.UPDATE:
                             obj.__exit__(None, None, None)
                         elif status == TxStatus.ADD:
-                            self._notx_add(obj)
+                            self._notx_add(obj, upsert=False)
+                        elif status == TxStatus.UPSERT:
+                            self._notx_add(obj, upsert=True)
                         elif status == TxStatus.REMOVE:
                             self._notx_remove(obj)
                         needs_rollback.add((obj, status))
@@ -246,7 +303,7 @@ class Table(Selectable[T]):
                         obj.__exit__(type(e), e, None)
                 # update cache from objs that appeared committed
                 for obj, status in needs_rollback:
-                    if status == TxStatus.ADD:
+                    if status in (TxStatus.ADD, TxStatus.UPSERT):
                         self._cache.pop(obj._to_pk_tuple(), None)
                     else:
                         self.select(**obj._to_pk())

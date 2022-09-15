@@ -3,4 +3,4 @@
 python -m virtualenv env
 . ./env/bin/activate || . ./env/Scripts/activate
 pip install codecov
-python -m codecov
+python -m codecov -t "$1"

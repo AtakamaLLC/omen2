@@ -30,4 +30,4 @@ jobs:
     - name: Test
       run: |
         ./ci-test.sh
-        ./ci-cov.sh
+        ./ci-cov.sh ${{ secrets.CODECOV_TOKEN }}

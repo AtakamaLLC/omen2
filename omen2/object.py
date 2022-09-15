@@ -38,6 +38,7 @@ class ObjMeta:
         self.suppress_get_changes = False
         self.changes: Dict[str, Any] = None
         self.in_sync = False
+        self.up_fds = None
 
 
 VERY_LARGE_LOCK_TIMEOUT = 120
@@ -92,6 +93,9 @@ class ObjBase:
         self.__meta = ObjMeta()
         self._check_kws(kws)
         self.__meta.new = True
+
+    def _set_up_fds(self, up_fds):
+        self.__meta.up_fds = up_fds
 
     def _save_pk(self):
         self.__meta.pk = self._to_pk()
@@ -402,7 +406,7 @@ class ObjBase:
                 for k, v in changes.items():
                     setattr(self, k, v)
 
-    def _commit(self):
+    def _commit(self, upsert=False):
         """Apply all pending changes to the object, and to the db."""
         changes = []
 
@@ -418,7 +422,7 @@ class ObjBase:
         cascade = self._collect_cascade() if self._cascade else {}
 
         # save changes to the db
-        self._save(changes)
+        self._save(changes, upsert=upsert)
 
         # commit any changes in unbound relations to the db
         for val in self.__dict__.values():
@@ -448,13 +452,16 @@ class ObjBase:
             table = self.__meta.table
             table._db_remove(self)
 
-    def _save(self, keys: Iterable[str]):
+    def _save(self, keys: Iterable[str], upsert: bool):
         """Save myself to my table."""
 
         need_id_field = self._need_id()
         table = self.__meta.table
         if need_id_field or self.__meta.new:
-            table.db_insert(self, need_id_field)
+            if upsert:
+                table.db_upsert(self, need_id_field, self.__meta.up_fds)
+            else:
+                table.db_insert(self, need_id_field)
         elif keys:
             # update bound object
             table.update(self, keys)
