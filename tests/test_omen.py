@@ -1288,3 +1288,50 @@ def test_explicit_upsert():
 
     with pytest.raises(AssertionError):
         mgr.cars.upsert(car1, gas_level=0.5)
+
+
+def test_upsert_in_tx():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+
+    # add obj
+    with mgr.transaction():
+        car0 = mgr.cars.upsert(Car(id=12, color="red", gas_level=0.3))
+        assert mgr.cars.select(id=12)
+        raise OmenRollbackError
+
+    assert not mgr.cars.select_one(id=12)
+
+    with mgr.transaction():
+        car1 = mgr.cars.upsert(Car(id=12, color="red", gas_level=0.3))
+        assert mgr.cars.select(id=12)
+
+    assert car0 is not car1
+
+    assert mgr.cars.select_one(id=12) is car1
+
+    # update by obj
+    with mgr.transaction():
+        mgr.cars.upsert(Car(id=12, color="green", gas_level=0.3))
+        raise OmenRollbackError
+
+    assert mgr.cars.select_one(id=12).color == "red"
+
+    with mgr.transaction():
+        mgr.cars.upsert(Car(id=12, color="green", gas_level=0.3))
+
+    assert mgr.cars.select_one(id=12).color == "green"
+
+    # update by field
+    with mgr.transaction():
+        mgr.cars.upsert(id=12, gas_level=0.4)
+        raise OmenRollbackError
+
+    assert mgr.cars.select_one(id=12).gas_level == 0.3
+
+    with mgr.transaction():
+        mgr.cars.upsert(id=12, gas_level=0.4)
+
+    assert mgr.cars.select_one(id=12).gas_level == 0.4
+    assert mgr.cars.select_one(id=12).color == "green"

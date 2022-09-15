@@ -8,6 +8,7 @@ import contextlib
 import importlib
 import os
 import sys
+import threading
 import logging as log
 from contextlib import contextmanager
 
@@ -46,6 +47,7 @@ class Omen(abc.ABC):
         self.table_types = self.table_types.copy()
         self.tables: Dict[Type["Table"], "Table"] = {}
         self.db = db
+        self._tx_ids = set()
 
         self._create_if_needed()
 
@@ -219,10 +221,17 @@ class Omen(abc.ABC):
 
         On exception it will restore any cached information to the previous state.
         """
+        tid = threading.get_ident()
         try:
+            self._tx_ids.add(tid)
             with contextlib.ExitStack() as stack:
                 for tab in self.tables.values():
                     stack.enter_context(tab._unsafe_transaction())
                 yield self
         except OmenRollbackError:
             pass
+        finally:
+            self._tx_ids.discard(tid)
+
+    def in_tx(self):
+        threading.get_ident() in self._tx_ids

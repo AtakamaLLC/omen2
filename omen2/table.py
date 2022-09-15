@@ -319,7 +319,8 @@ class Table(Selectable[T]):
             with self._unsafe_transaction():
                 yield
         except OmenRollbackError:
-            pass
+            if self.manager.in_tx:
+                raise
 
     def _in_tx(self):
         return threading.get_ident() in self._tx_objs
