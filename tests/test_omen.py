@@ -140,6 +140,14 @@ def test_threaded():
     assert mgr.db.select_one("cars", id=car.id).gas_level == num_t
 
 
+def test_upsert_adds_ids():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car = mgr.cars.upsert(Car(gas_level=2))
+    assert car.id
+
+
 def test_rollback():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db, cars=Cars)
