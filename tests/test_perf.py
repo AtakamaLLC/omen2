@@ -104,6 +104,7 @@ def test_ver_swap():
     f1 = omen2.__file__
     with swap_version("1.4.3"):
         import omen2
+
         assert omen2.__file__ != f1
 
 

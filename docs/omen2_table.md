@@ -49,6 +49,9 @@ Equivalent to: table.add(Object(*a, **kw))
 #### .remove(self, obj:'ObjBase'=None, **kws)
 Remove an object from the db.
 
+#### .remove\_all(self, **kws)
+Remove all matching objects from the db.
+
 #### .select(self, \_where={}, \_order\_by=None, **kws) -> Iterable[~T]
 Read objects of specified class.
 
@@ -59,7 +62,7 @@ Specify _order_by="field" or ["field1 desc", "field2"] to sort the results.
 Use in a with block to enter a transaction on this table only.
 
 #### .update(self, obj:~T, keys:Iterable[str])
-Update objectdb + cache
+Update object db + cache
 
 #### .upsert(self, *a, **kw) -> ~T
 Update row in db if present, otherwise, insert row.
