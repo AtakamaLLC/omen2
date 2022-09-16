@@ -122,6 +122,10 @@ class Table(Selectable[T]):
     def _notx_add(self, obj: U, upsert: bool = False) -> U:
         obj._bind(table=self)
         obj._commit(upsert=upsert)
+        if upsert:
+            with suppress(OmenNoPkError):
+                pk = obj._to_pk_tuple()
+            obj = self._cache.get(pk)
         return obj
 
     def remove(self, obj: "ObjBase" = None, **kws):
@@ -210,7 +214,13 @@ class Table(Selectable[T]):
         if id_field and hasattr(ret, "lastrowid"):
             obj.__dict__[id_field] = ret.lastrowid
 
-        self._add_cache(obj)
+        with suppress(OmenNoPkError):
+            pk = obj._to_pk_tuple()
+        alr = self._cache.get(pk)
+        if alr:
+            alr._update_from_object(obj)
+        else:
+            self._add_cache(obj)
 
     def db_select(self, where):
         """Call select on the underlying db, given a where dict of keys/values."""

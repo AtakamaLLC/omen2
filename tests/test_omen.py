@@ -1348,6 +1348,11 @@ def test_explicit_upsert():
     car1 = mgr.cars.upsert(Car(id=12, color="red", gas_level=0.3))
     assert mgr.cars.select_one(id=12).color == "red"
     mgr.cars.upsert(Car(id=12, gas_level=0.4))
+
+    # cache singleton is updated
+    assert car1.gas_level == 0.4
+    assert car1.color == "black"
+
     # defaults are copied in
     assert mgr.cars.select_one(id=12).color == "black"
     assert mgr.cars.select_one(id=12).gas_level == 0.4
@@ -1355,6 +1360,10 @@ def test_explicit_upsert():
     # complex object-level upsert
     car2 = mgr.cars.upsert(Car(id=13, color="red", gas_level=0.3))
     mgr.cars.upsert(id=13, gas_level=0.5)
+
+    # cache singleton is updated
+    assert car2.gas_level == 0.5
+    assert car2.color == "red"
 
     # no affect on color
     assert mgr.cars.select_one(id=13).color == "red"
