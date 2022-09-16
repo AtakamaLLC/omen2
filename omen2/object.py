@@ -488,6 +488,10 @@ class ObjBase:
                 self.__need_attr = False
                 self.__meta.lock_id = threading.get_ident()
                 self._table.locked_objs.add(self)
+            if self._sync_on_getattr:
+                res = self._table.db_select(self._to_pk())[0]
+                for k, v in res.items():
+                    object.__setattr__(self, k, v)
         return self
 
     def __exit__(self, typ, ex, tb):
