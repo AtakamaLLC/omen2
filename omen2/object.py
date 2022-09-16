@@ -97,9 +97,6 @@ class ObjBase:
     def _set_up_fds(self, up_fds):
         self.__meta.up_fds = up_fds
 
-    def _get_up_fds(self):
-        return self.__meta is not None and self.__meta.up_fds
-
     def _save_pk(self):
         self.__meta.pk = self._to_pk()
 

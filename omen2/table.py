@@ -125,7 +125,7 @@ class Table(Selectable[T]):
         if upsert:
             with suppress(OmenNoPkError):
                 pk = obj._to_pk_tuple()
-            obj = self._cache.get(pk)
+                obj = self._cache.get(pk)
         return obj
 
     def remove(self, obj: "ObjBase" = None, **kws):
