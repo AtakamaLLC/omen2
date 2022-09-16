@@ -77,7 +77,7 @@ class Table(Selectable[T]):
         obj = self.row_type(*a, **kw)
         return self.add(obj)
 
-    def upsert(self, *a, **kw) -> T:
+    def upsert(self, *a, _insert_only=None, **kw) -> T:
         """Update row in db if present, otherwise, insert row.
 
         table.upsert(Object(...))
@@ -94,8 +94,12 @@ class Table(Selectable[T]):
             assert len(a) == 1, "only one object allowed"
             assert not kw, "cannot mix kw and obj upsert"
         else:
+            up_fds = kw.keys()
+            if _insert_only:
+                up_fds = set(up_fds) - set(_insert_only.keys())
+                kw.update(_insert_only)
             obj = self.row_type(*a, **kw)
-            obj._set_up_fds(kw.keys())
+            obj._set_up_fds(up_fds)
         return self._add(obj, upsert=True)
 
     def add(self, obj: U) -> U:
