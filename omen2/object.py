@@ -96,7 +96,7 @@ class ObjBase:
 
     def _set_up_fds(self, up_fds):
         self.__meta.up_fds = up_fds
-    
+
     def _get_up_fds(self):
         return self.__meta is not None and self.__meta.up_fds
 
@@ -153,9 +153,9 @@ class ObjBase:
             for k, v in obj.__dict__.items()
             if (
                 (not obj.__meta.up_fds or k in obj.__meta.up_fds)
-             and not isinstance(v, Relation) 
-             and not k.startswith("_ObjBase__")
-             )
+                and not isinstance(v, Relation)
+                and not k.startswith("_ObjBase__")
+            )
         }
         self._atomic_apply(self, update)
 
