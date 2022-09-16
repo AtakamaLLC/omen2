@@ -1128,8 +1128,32 @@ def test_sync_on_getattr():
     assert car.color == "green"
     db.update("cars", id=car.id, color="blue")
     assert car.color == "blue"
+    db.update("cars", id=car.id, color="intx")
 
+    ok = False
+    event1 = threading.Event()
+    event2 = threading.Event()
+    def _other():
+        nonlocal ok
+        event1.wait()
+        ok = car.color == "intx"
+        event2.set()
+    
+    threading.Thread(target=_other, daemon=True).start()
 
+    with car:
+        assert car.color == "intx"
+        car.color = "commit"
+        event1.set()
+        event2.wait()
+
+    # while in the tx, the color is stable for other threads
+    assert ok
+
+    assert db.select_one("cars", id=car.id).color == "commit"
+
+    
+        
 def test_cache_sharing():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db)
