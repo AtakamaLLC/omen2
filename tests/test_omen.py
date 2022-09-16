@@ -1375,7 +1375,6 @@ def test_explicit_upsert():
     mgr.cars.upsert(id=14, color="green", _insert_only={"gas_level": 0.9})
     assert mgr.cars.select_one(id=14).gas_level == 0.3
     assert mgr.cars.select_one(id=14).color == "green"
-    
 
     # invalid syntax
     with pytest.raises(AssertionError):
