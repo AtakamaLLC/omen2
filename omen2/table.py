@@ -127,9 +127,8 @@ class Table(Selectable[T]):
         obj._bind(table=self)
         obj._commit(upsert=upsert)
         if upsert:
-            with suppress(OmenNoPkError):
-                pk = obj._to_pk_tuple()
-                obj = self._cache.get(pk, obj)
+            pk = obj._to_pk_tuple()
+            obj = self._cache.get(pk, obj)
         return obj
 
     def remove(self, obj: "ObjBase" = None, **kws):
@@ -183,11 +182,11 @@ class Table(Selectable[T]):
     def _add_cache(self, obj: T):
         with suppress(OmenNoPkError):
             pk = obj._to_pk_tuple()
-        alr = self._cache.get(pk)
-        self._cache[pk] = obj
-        if alr is not None and alr is not obj:
-            # update old refs as best we can
-            alr._update_from_object(obj)
+            alr = self._cache.get(pk)
+            self._cache[pk] = obj
+            if alr is not None and alr is not obj:
+                # update old refs as best we can
+                alr._update_from_object(obj)
 
     def db_insert(self, obj: T, id_field):
         """Update the db + cache from object."""
@@ -218,13 +217,12 @@ class Table(Selectable[T]):
         if id_field and hasattr(ret, "lastrowid"):
             obj.__dict__[id_field] = ret.lastrowid
 
-        with suppress(OmenNoPkError):
-            pk = obj._to_pk_tuple()
+        pk = obj._to_pk_tuple()
         alr = self._cache.get(pk)
         if alr:
             alr._update_from_object(obj)
-        else:
-            self._add_cache(obj)
+            return
+        self._add_cache(obj)
 
     def db_select(self, where):
         """Call select on the underlying db, given a where dict of keys/values."""

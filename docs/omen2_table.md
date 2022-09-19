@@ -64,7 +64,7 @@ Use in a with block to enter a transaction on this table only.
 #### .update(self, obj:~T, keys:Iterable[str])
 Update object db + cache
 
-#### .upsert(self, *a, **kw) -> ~T
+#### .upsert(self, *a, \_insert\_only=None, **kw) -> ~T
 Update row in db if present, otherwise, insert row.
 
 table.upsert(Object(...))
