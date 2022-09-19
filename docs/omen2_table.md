@@ -73,6 +73,9 @@ or
 
 table.upsert(key2=val1, key2=val2)
 
+Arg :_insert_only: is a dict of values that are used when inserting and constructing
+the insertion object, but are ignored when updatin.
+
 Note: If using the keyword-version of this function, all values that
       are not indicated by the keywords will retain the values of the existing row.
 
