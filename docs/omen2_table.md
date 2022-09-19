@@ -64,7 +64,7 @@ Use in a with block to enter a transaction on this table only.
 #### .update(self, obj:~T, keys:Iterable[str])
 Update object db + cache
 
-#### .upsert(self, *a, **kw) -> ~T
+#### .upsert(self, *a, \_insert\_only=None, **kw) -> ~T
 Update row in db if present, otherwise, insert row.
 
 table.upsert(Object(...))
@@ -72,6 +72,9 @@ table.upsert(Object(...))
 or
 
 table.upsert(key2=val1, key2=val2)
+
+Arg :_insert_only: is a dict of values that are used when inserting and constructing
+the insertion object, but are ignored when updatin.
 
 Note: If using the keyword-version of this function, all values that
       are not indicated by the keywords will retain the values of the existing row.

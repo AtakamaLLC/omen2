@@ -77,7 +77,7 @@ class Table(Selectable[T]):
         obj = self.row_type(*a, **kw)
         return self.add(obj)
 
-    def upsert(self, *a, **kw) -> T:
+    def upsert(self, *a, _insert_only=None, **kw) -> T:
         """Update row in db if present, otherwise, insert row.
 
         table.upsert(Object(...))
@@ -85,6 +85,9 @@ class Table(Selectable[T]):
         or
 
         table.upsert(key2=val1, key2=val2)
+
+        Arg :_insert_only: is a dict of values that are used when inserting and constructing
+        the insertion object, but are ignored when updatin.
 
         Note: If using the keyword-version of this function, all values that
               are not indicated by the keywords will retain the values of the existing row.
@@ -94,8 +97,12 @@ class Table(Selectable[T]):
             assert len(a) == 1, "only one object allowed"
             assert not kw, "cannot mix kw and obj upsert"
         else:
+            up_fds = kw.keys()
+            if _insert_only:
+                up_fds = set(up_fds) - set(_insert_only.keys())
+                kw.update(_insert_only)
             obj = self.row_type(*a, **kw)
-            obj._set_up_fds(kw.keys())
+            obj._set_up_fds(up_fds)
         return self._add(obj, upsert=True)
 
     def add(self, obj: U) -> U:
@@ -122,6 +129,9 @@ class Table(Selectable[T]):
     def _notx_add(self, obj: U, upsert: bool = False) -> U:
         obj._bind(table=self)
         obj._commit(upsert=upsert)
+        if upsert:
+            pk = obj._to_pk_tuple()
+            obj = self._cache.get(pk, obj)
         return obj
 
     def remove(self, obj: "ObjBase" = None, **kws):
@@ -175,11 +185,11 @@ class Table(Selectable[T]):
     def _add_cache(self, obj: T):
         with suppress(OmenNoPkError):
             pk = obj._to_pk_tuple()
-        alr = self._cache.get(pk)
-        self._cache[pk] = obj
-        if alr is not None and alr is not obj:
-            # update old refs as best we can
-            alr._update_from_object(obj)
+            alr = self._cache.get(pk)
+            self._cache[pk] = obj
+            if alr is not None and alr is not obj:
+                # update old refs as best we can
+                alr._update_from_object(obj)
 
     def db_insert(self, obj: T, id_field):
         """Update the db + cache from object."""
@@ -210,6 +220,11 @@ class Table(Selectable[T]):
         if id_field and hasattr(ret, "lastrowid"):
             obj.__dict__[id_field] = ret.lastrowid
 
+        pk = obj._to_pk_tuple()
+        alr = self._cache.get(pk)
+        if alr:
+            alr._update_from_object(obj)
+            return
         self._add_cache(obj)
 
     def db_select(self, where):

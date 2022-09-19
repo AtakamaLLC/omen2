@@ -148,7 +148,11 @@ class ObjBase:
         update = {
             k: v
             for k, v in obj.__dict__.items()
-            if not isinstance(v, Relation) and not k.startswith("_ObjBase__")
+            if (
+                (not obj.__meta.up_fds or k in obj.__meta.up_fds)
+                and not isinstance(v, Relation)
+                and not k.startswith("_ObjBase__")
+            )
         }
         self._atomic_apply(self, update)
 
