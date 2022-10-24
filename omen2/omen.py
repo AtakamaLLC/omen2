@@ -206,7 +206,8 @@ class Omen(abc.ABC):
         mod2 = self.model
         for tab in self.AUTOCREATE_IGNORE_TABLES:
             mod1.pop(tab, None)
-        if not mod1 == mod2:
+            mod2.pop(tab, None)
+        if not sorted(mod1.keys()) == sorted(mod2.keys()):
             self.__multi_query(self.db, self.schema(self.version))
 
     @classmethod
