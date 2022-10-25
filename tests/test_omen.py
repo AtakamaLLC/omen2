@@ -1203,12 +1203,13 @@ def test_sync_on_getattr():
     ok = False
     event1 = threading.Event()
     event2 = threading.Event()
+
     def _other():
         nonlocal ok
         event1.wait()
         ok = car.color == "intx"
         event2.set()
-    
+
     threading.Thread(target=_other, daemon=True).start()
 
     with car:
@@ -1222,8 +1223,7 @@ def test_sync_on_getattr():
 
     assert db.select_one("cars", id=car.id).color == "commit"
 
-    
-        
+
 def test_cache_sharing():
     db = SqliteDb(":memory:")
     mgr = MyOmen(db)

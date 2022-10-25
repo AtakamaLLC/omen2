@@ -32,6 +32,10 @@ class Omen(abc.ABC):
     model: DbModel = None
     table_types: Dict[str, Type["Table"]] = None
 
+    # todo: deprecate this
+    AUTOCREATE = True
+    AUTOCREATE_IGNORE_TABLES = ["_omen"]
+
     def __init_subclass__(cls, **_kws):
         cls.table_types = {}
 
@@ -47,7 +51,8 @@ class Omen(abc.ABC):
         self.tables: Dict[Type["Table"], "Table"] = {}
         self.db = db
 
-        self._create_if_needed()
+        if self.AUTOCREATE:
+            self._create_if_needed()
 
         self.table_types.update(table_types)
 
@@ -199,9 +204,10 @@ class Omen(abc.ABC):
         # TODO: this should be removed, not good behavior
         mod1 = self.db.model()
         mod2 = self.model
-        mod1.pop("_omen", None)
-        mod2.pop("_omen", None)
-        if not mod1 == mod2:
+        for tab in self.AUTOCREATE_IGNORE_TABLES:
+            mod1.pop(tab, None)
+            mod2.pop(tab, None)
+        if not sorted(mod1.keys()) == sorted(mod2.keys()):
             self.__multi_query(self.db, self.schema(self.version))
 
     @classmethod
