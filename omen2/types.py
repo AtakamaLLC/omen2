@@ -34,9 +34,9 @@ bool_type.__name__ = "bool"
 
 def string_type(arg):
     """Convert sql string to str, this function must have the __name__ 'str'"""
-    assert arg[0] in ("'", '"')
-    # return with quotes
-    return arg
+    if arg[0] in ("'", '"'):
+        return arg
+    return "'" + arg + "'"
 
 
 string_type.__name__ = "str"

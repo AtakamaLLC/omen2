@@ -875,6 +875,8 @@ def test_override_for_keywords():
         def schema(cls, version):
             return "create table ents (id blob primary key, while, for, blob text)"
 
+        dialect = "sqlite"
+
     db = SqliteDb(":memory:")
 
     class Ent(ObjBase):

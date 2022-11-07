@@ -54,6 +54,29 @@ def test_codegen(tmp_path):
     assert zap.__annotations__["anyold"] is Any
 
 
+def test_codegen_dialect(tmp_path):
+    out_path = str(tmp_path / "gen.py")
+
+    class Test(Omen):
+        @classmethod
+        def schema(cls, version):
+            return """
+                create table zappy(
+                    id integer auto_increment primary key,
+                    floaty double default 1.0,
+                );
+            """
+
+        dialect = "mysql"
+
+    mod = Test.codegen(out_path=out_path)
+
+    zap = mod.zappy_row()
+    assert zap.floaty == 1.0
+    assert zap.__annotations__["floaty"] is Optional[float]
+    assert zap.__annotations__["id"] is Optional[int]
+
+
 def test_codegen_pathed(tmp_path):
     p = tmp_path / "gen.py"
     mod = CodeGen.generate_from_path("tests.schema.MyOmen", out_path=str(p))

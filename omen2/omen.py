@@ -11,7 +11,7 @@ import sys
 import logging as log
 from contextlib import contextmanager
 
-from notanorm import DbBase, SqliteDb, DbModel
+from notanorm import DbBase, SqliteDb, DbModel, model_from_ddl
 from typing import Any, Optional, Dict, Type, Iterable, TypeVar
 
 from .table import Table
@@ -40,9 +40,10 @@ class Omen(abc.ABC):
         cls.table_types = {}
 
         if not cls.model:
-            db = SqliteDb(":memory:")
-            cls.__multi_query(db, cls.schema(cls.version))
-            cls.model: DbModel = db.model()
+            ddl = cls.schema(cls.version)
+            dialect = getattr(cls, "dialect", None)
+            dialect = (dialect,) if dialect else ()
+            cls.model: DbModel = model_from_ddl(ddl, *dialect)
 
     def __init__(self, db: DbBase, module=None, type_checking=False, **table_types):
         """Create a new manager with a db connection."""
@@ -208,7 +209,9 @@ class Omen(abc.ABC):
             mod1.pop(tab, None)
             mod2.pop(tab, None)
         if not sorted(mod1.keys()) == sorted(mod2.keys()):
-            self.__multi_query(self.db, self.schema(self.version))
+            # create missing tables
+            mod = DbModel({k: v for k, v in self.model.items() if k not in mod1})
+            self.db.create_model(mod)
 
     @classmethod
     @abc.abstractmethod
