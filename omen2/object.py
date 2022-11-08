@@ -64,7 +64,7 @@ class ObjBase:
         return obj._to_pk() == self._to_pk()
 
     def __repr__(self):
-        return self.__class__.__name__ + "(" + str(self._to_pk()) + ")"
+        return self.__class__.__name__ + "(" + str(self._to_pk(unsafe=True)) + ")"
 
     def __str__(self):
         return str(self._to_db())
@@ -212,7 +212,7 @@ class ObjBase:
                 ret[k] = v
             return ret
 
-    def _to_pk(self):
+    def _to_pk(self, unsafe=False):
         """Get dict of serialized data from self, but pk elements only.
 
         You will have to override this if you're overriding _to_db, and
@@ -229,7 +229,7 @@ class ObjBase:
         ret = {}
         for k in self._pk:
             v = getattr(self, k)
-            if v is None:
+            if v is None and not unsafe:
                 raise OmenNoPkError("invalid primary key")
             ret[k] = v
         return ret

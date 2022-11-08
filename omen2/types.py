@@ -36,8 +36,8 @@ def string_type(arg):
     """Convert sql string to str, this function must have the __name__ 'str'"""
     if arg[0] in ("'", '"'):
         return arg
-    else:  # pragma: no cover
-        # saw this once, haven't been able to repro exact ddl
+    else:
+        # needed for ddl parser, vs sqlite parser.  todo: normalize default values
         return "'" + arg + "'"
 
 

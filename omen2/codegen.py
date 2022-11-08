@@ -114,7 +114,7 @@ class CodeGen:
                     try:
                         # check valid python
                         defval = pytype(str(col.default))  # pylint: disable=eval-used
-                    except (ValueError, NameError, TypeError):
+                    except (ValueError, NameError):
                         # no way to generate a default value for some stuff
                         defval = None
                         log.warning(

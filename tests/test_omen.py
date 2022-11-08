@@ -758,6 +758,13 @@ def test_any_type():
     assert mgr[whatever].select_one(any="change")
 
 
+def test_nopk_repr():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    assert repr(Car(gas_level=1))
+    assert str(Car(gas_level=1))
+
+
 def test_inline_omen_no_codegen():
     # noinspection PyAbstractClass
     class Harbinger(Omen):
