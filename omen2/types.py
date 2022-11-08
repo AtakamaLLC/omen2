@@ -36,7 +36,9 @@ def string_type(arg):
     """Convert sql string to str, this function must have the __name__ 'str'"""
     if arg[0] in ("'", '"'):
         return arg
-    return "'" + arg + "'"
+    else:  # pragma: no cover
+        # saw this once, haven't been able to repro exact ddl
+        return "'" + arg + "'"
 
 
 string_type.__name__ = "str"
@@ -61,4 +63,5 @@ def default_type(typ: DbType) -> Callable:  # pylint: disable=too-many-return-st
         return bool_type
     if typ == DbType.DOUBLE:
         return float
-    raise ValueError("unknown type: %s" % typ)
+    # should never happen
+    raise AssertionError("unknown type: %s" % typ)

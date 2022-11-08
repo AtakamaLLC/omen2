@@ -63,7 +63,8 @@ def test_codegen_dialect(tmp_path):
             return """
                 create table zappy(
                     id integer auto_increment primary key,
-                    floaty double default 1.0,
+                    floaty float default 1.0,
+                    doubly double default 1.0,
                 );
             """
 
@@ -73,6 +74,7 @@ def test_codegen_dialect(tmp_path):
 
     zap = mod.zappy_row()
     assert zap.floaty == 1.0
+    assert zap.__annotations__["doubly"] is Optional[float]
     assert zap.__annotations__["floaty"] is Optional[float]
     assert zap.__annotations__["id"] is Optional[int]
 
