@@ -11,7 +11,7 @@ import sys
 import logging as log
 from contextlib import contextmanager
 
-from notanorm import DbBase, SqliteDb, DbModel, model_from_ddl
+from notanorm import DbBase, DbModel, model_from_ddl
 from typing import Any, Optional, Dict, Type, Iterable, TypeVar
 
 from .table import Table
@@ -190,16 +190,6 @@ class Omen(abc.ABC):
             table_type = getattr(module, name)
             if isinstance(table_type, type) and issubclass(table_type, Table):
                 table_types[table_type.table_name] = table_type
-
-    @staticmethod
-    def __multi_query(db, sql):
-        unlikely = "@!'\"~z@"
-        assert unlikely not in sql
-        sql = sql.replace("\\;", unlikely)
-        queries = sql.split(";")
-        for q in queries:
-            q = q.replace(unlikely, ";")
-            db.query(q)
 
     def _create_if_needed(self):
         # TODO: this should be removed, not good behavior
