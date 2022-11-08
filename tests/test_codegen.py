@@ -33,7 +33,8 @@ def test_many_types_sqlite(tmp_path):
                     class text
                 );
             """
-        dialect="sqlite"
+
+        dialect = "sqlite"
 
     mod = Test.codegen(out_path=out_path)
 
@@ -73,6 +74,7 @@ def test_many_types_mysql(tmp_path):
                     `group` text not null,
                 );
             """
+
         dialect = "mysql"
 
     mod = Test.codegen(out_path=out_path)
