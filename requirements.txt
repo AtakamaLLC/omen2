@@ -4,7 +4,8 @@ coverage>=5
 pytest-cov
 pytest-xdist
 pylint==2.13.9
-notanorm>=2.7.0
+notanorm>=3.0
+sqlglot
 docmd
 black
 pre-commit

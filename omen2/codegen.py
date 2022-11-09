@@ -108,9 +108,9 @@ class CodeGen:
             # we're in the init parameter line: `color: str`
             print(name_and_type, file=out, end="")
 
-            if col.default or not col.notnull:
+            if col.default is not None or not col.notnull:
                 # derive default value from the db default value
-                if col.default:
+                if col.default is not None:
                     try:
                         # check valid python
                         defval = pytype(str(col.default))  # pylint: disable=eval-used
