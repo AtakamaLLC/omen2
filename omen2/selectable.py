@@ -66,6 +66,7 @@ class Selectable(Generic[T]):
 
         try:
             next(itr)
+            itr.close()
             raise OmenMoreThanOneError
         except StopIteration:
             return one

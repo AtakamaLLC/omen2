@@ -9,7 +9,7 @@ import threading
 import time
 from contextlib import suppress
 from multiprocessing.pool import ThreadPool
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from types import ModuleType
 
 import pytest
@@ -1370,6 +1370,52 @@ def test_no_upsert_on_existing():
     with car:
         car.gas_level = 5
     assert not mgr.cars.select_one(id=12)
+
+
+def test_omen_fetch_close_select_one():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db)
+    mgr.cars = Cars(mgr)
+
+    db.insert("cars", id=12, gas_level=0, color="green")
+    db.insert("cars", id=13, gas_level=0, color="green")
+    db.insert("cars", id=14, gas_level=0, color="green")
+    db.insert("cars", id=15, gas_level=0, color="green")
+
+    orig_exec = mgr.db.execute
+
+    # allows us to mock the return call without altering the result set / behavior
+    class Wrap(object):
+        def __init__(self, obj):
+            self._wrapped_obj = obj
+
+        def __getattr__(self, attr):
+            if attr in self.__dict__:
+                return getattr(self, attr)
+            return getattr(self._wrapped_obj, attr)
+
+    def new_exec(*a, **k):
+        # returns a wrapped cursor that has a trackabale close funcion
+        nonlocal check_mock
+        ret = orig_exec(*a, **k)
+        ret = Wrap(ret)
+        ret.close = MagicMock(side_effect=ret._wrapped_obj.close)
+        check_mock = ret.close
+        return ret
+
+    check_mock = None
+
+    # this holds a reference to the iterator, so it won't GeneratorExit on __del__
+    ref_holder = []
+    with patch.object(mgr.db, "execute", new_exec):
+        with pytest.raises(OmenMoreThanOneError):
+            itr = mgr.cars.select(color="green")
+            ref_holder.append(itr)
+
+            # fails because more than one
+            mgr.cars._return_one(itr)
+
+        check_mock.assert_called()
 
 
 def test_explicit_upsert():
