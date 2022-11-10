@@ -34,9 +34,11 @@ bool_type.__name__ = "bool"
 
 def string_type(arg):
     """Convert sql string to str, this function must have the __name__ 'str'"""
-    assert arg[0] in ("'", '"')
-    # return with quotes
-    return arg
+    if arg[0] in ("'", '"'):
+        return arg
+    else:
+        # needed for ddl parser, vs sqlite parser.  todo: normalize default values
+        return "'" + arg + "'"
 
 
 string_type.__name__ = "str"
@@ -61,4 +63,5 @@ def default_type(typ: DbType) -> Callable:  # pylint: disable=too-many-return-st
         return bool_type
     if typ == DbType.DOUBLE:
         return float
-    raise ValueError("unknown type: %s" % typ)
+    # should never happen
+    raise AssertionError("unknown type: %s" % typ)

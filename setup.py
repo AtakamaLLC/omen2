@@ -15,14 +15,15 @@ def long_description():
 
 setup(
     name="omen2",
-    version="1.5.2",
+    version="2.0.1",
     description="Database object & cache manager",
     packages=["omen2"],
     long_description=long_description(),
     long_description_content_type="text/markdown",
     setup_requires=["wheel"],
     install_requires=[
-        "notanorm",
+        "notanorm>=3",
+        "sqlglot>=9",
     ],
     entry_points={"console_scripts": ["omen2-codegen=omen2.codegen:main"]},
 )

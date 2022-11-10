@@ -758,6 +758,13 @@ def test_any_type():
     assert mgr[whatever].select_one(any="change")
 
 
+def test_nopk_repr():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    assert repr(Car(gas_level=1))
+    assert str(Car(gas_level=1))
+
+
 def test_inline_omen_no_codegen():
     # noinspection PyAbstractClass
     class Harbinger(Omen):
@@ -874,6 +881,8 @@ def test_override_for_keywords():
         @classmethod
         def schema(cls, version):
             return "create table ents (id blob primary key, while, for, blob text)"
+
+        dialect = "sqlite"
 
     db = SqliteDb(":memory:")
 
