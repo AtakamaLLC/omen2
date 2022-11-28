@@ -7,7 +7,7 @@ import threading
 import weakref
 from contextlib import suppress
 from enum import Enum
-from typing import Set, Dict, Iterable, TYPE_CHECKING, TypeVar, Tuple
+from typing import Set, Dict, Iterable, TYPE_CHECKING, TypeVar, Tuple, Generator
 
 from .errors import OmenNoPkError, OmenRollbackError, IntegrityError
 import logging as log
@@ -235,7 +235,7 @@ class Table(Selectable[T]):
         """Call select_gen on the underlying db, given a where dict of keys/values."""
         yield from self.db.select_gen(self.table_name, None, where, order_by=order_by)
 
-    def __select_intx(self, where) -> Iterable[T]:
+    def __select_intx(self, where) -> Generator[T, None, None]:
         if self._in_tx():
             tid = threading.get_ident()
             for obj, status in self._tx_objs.get(tid, {}).items():
@@ -244,7 +244,7 @@ class Table(Selectable[T]):
                 if obj._matches(where):
                     yield obj
 
-    def __select(self, where, _order_by=None) -> Iterable[T]:
+    def __select(self, where, _order_by=None) -> Generator[T, None, None]:
         db_pks = set()
         db_where = {k: v for k, v in where.items() if k in self.field_names}
         attr_where = {k: v for k, v in where.items() if k not in self.field_names}
@@ -284,7 +284,7 @@ class Table(Selectable[T]):
             log.debug("removing %s from cache", pop_me)
             self._cache.pop(pop_me)
 
-    def select(self, _where={}, _order_by=None, **kws) -> Iterable[T]:
+    def select(self, _where={}, _order_by=None, **kws) -> Generator[T, None, None]:
         """Read objects of specified class.
 
         Specify _order_by="field" or ["field1 desc", "field2"] to sort the results.
@@ -376,7 +376,7 @@ class ObjCache(Selectable[T]):
         """Pass though to table on everything but select."""
         return getattr(self.table, item)
 
-    def select(self, _where={}, **kws) -> Iterable[T]:
+    def select(self, _where={}, **kws) -> Generator[T, None, None]:
         """Read objects from the cache."""
         kws.update(_where)
         for v in self.table._cache.values():

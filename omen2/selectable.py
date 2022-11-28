@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 """Generic selectable support for tables, relations and m2mhelpers."""
-from typing import TypeVar, Generic, Optional, Iterable, TYPE_CHECKING, Type
+from typing import TypeVar, Generic, Optional, Generator, TYPE_CHECKING, Type, Iterator
 
 from omen2.errors import OmenMoreThanOneError, OmenKeyError
 
@@ -19,7 +19,7 @@ class Selectable(Generic[T]):
 
     # pylint: disable=dangerous-default-value, protected-access
 
-    row_type: Type["T"]
+    row_type: Type[T]
 
     # noinspection PyProtectedMember
     def get(self, _id=None, _default=None, **kws) -> Optional[T]:
@@ -41,7 +41,7 @@ class Selectable(Generic[T]):
             return self.select_one(_where=item._to_pk()) is not None
         return self._get_by_id(item) is not None
 
-    def __call__(self, _id=None, **kws) -> Optional[T]:
+    def __call__(self, _id=None, **kws) -> T:
         if _id is not None:
             # noinspection PyProtectedMember
             assert len(self.row_type._pk) == 1
@@ -58,7 +58,7 @@ class Selectable(Generic[T]):
         return self._return_one(itr)
 
     @staticmethod
-    def _return_one(itr):
+    def _return_one(itr: Generator[T, None, None]) -> Optional[T]:
         try:
             one = next(itr)
         except StopIteration:
@@ -71,7 +71,7 @@ class Selectable(Generic[T]):
         except StopIteration:
             return one
 
-    def select(self, _where={}, **kws) -> Iterable[T]:
+    def select(self, _where={}, **kws) -> Generator[T, None, None]:
         """Read objects of specified class."""
         raise NotImplementedError
 
@@ -83,6 +83,6 @@ class Selectable(Generic[T]):
         """Return count of objs."""
         return self.count()
 
-    def __iter__(self) -> Iterable[T]:
+    def __iter__(self) -> Iterator[T]:
         """Shortcut for self.select()"""
-        return iter(self.select())
+        return self.select()
