@@ -83,6 +83,6 @@ class Selectable(Generic[T]):
         """Return count of objs."""
         return self.count()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterable[T]:
         """Shortcut for self.select()"""
         return iter(self.select())
