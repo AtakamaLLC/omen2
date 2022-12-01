@@ -139,9 +139,10 @@ class Omen(abc.ABC):
         for idx in model.indexes:
             if idx.primary:
                 pk = idx.fields
+
         if pk and len(pk) == 1 and tab.allow_auto is None:
             for fd in model.columns:
-                if fd.name == pk[0]:
+                if fd.name == (pk[0] if type(pk[0]) is str else pk[0].name):
                     tab.allow_auto = fd.autoinc
 
     def _bootstrap_row_type(self, tab):

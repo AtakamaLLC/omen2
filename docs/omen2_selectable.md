@@ -13,7 +13,7 @@ Return count of objs matchig where clause.  Override for efficiency.
 #### .get(self, \_id=None, \_default=None, **kws) -> Optional[~T]
 Shortcut method, you can access object by a single pk/positional id.
 
-#### .select(self, \_where={}, **kws) -> Iterable[~T]
+#### .select(self, \_where={}, **kws) -> Generator[~T, NoneType, NoneType]
 Read objects of specified class.
 
 #### .select\_one(self, \_where={}, **kws) -> Optional[~T]

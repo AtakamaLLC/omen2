@@ -10,7 +10,7 @@ Omen2 object cache: same interface as table, but all objects are preloaded.
 #### .reload(self)
 Reload the objects in the cache from the db.
 
-#### .select(self, \_where={}, **kws) -> Iterable[~T]
+#### .select(self, \_where={}, **kws) -> Generator[~T, NoneType, NoneType]
 Read objects from the cache.
 
 
@@ -52,7 +52,7 @@ Remove an object from the db.
 #### .remove\_all(self, **kws)
 Remove all matching objects from the db.
 
-#### .select(self, \_where={}, \_order\_by=None, **kws) -> Iterable[~T]
+#### .select(self, \_where={}, \_order\_by=None, **kws) -> Generator[~T, NoneType, NoneType]
 Read objects of specified class.
 
 Specify _order_by="field" or ["field1 desc", "field2"] to sort the results.
