@@ -7,7 +7,7 @@ Omen2: One to many relationship helper.
 Omen2: One to many relationship helper.
 
 
-#### .add(self, obj:'ObjBase')
+#### .add(self, obj: 'ObjBase')
 Add object to relation.
 
 If relation is unbound, the object is stored in ram until the relation object is committed.
@@ -24,7 +24,7 @@ TODO: relation-with-blocks that track changes, just like their parents.
 #### .is\_bound(self)
 Is this relation bound to the db.
 
-#### .remove(self, obj:'ObjBase')
+#### .remove(self, obj: 'ObjBase')
 Remove object from relation.
 
 TODO: could allow removing by **kws primary key (like m2m removes)
