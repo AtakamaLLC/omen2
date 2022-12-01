@@ -8,7 +8,6 @@ from omen2.errors import OmenKeyError
 
 from typing import (
     TypeVar,
-    Iterable,
     TYPE_CHECKING,
     Type,
     Tuple,
@@ -16,6 +15,7 @@ from typing import (
     Generic,
     Optional,
     List,
+    Generator,
 )
 
 from .relation import Relation
@@ -86,8 +86,11 @@ class M2MMixObj(Generic[T1, T2]):
         return ret
 
 
+ROW_TYPE = Union[T2, M2MMixObj[T1, T2]]
+
+
 # noinspection PyProtectedMember,PyDefaultArgument
-class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
+class M2MHelper(Relation[ROW_TYPE]):
     """Convenience class that defines a special case of Relationship.
 
     The M2MHelper returns a collection of T2, instead of a collection of T1 objects.
@@ -133,7 +136,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         """
         self.__saved: List[M2MMixObj] = []
         self.__field_map = where
-        self.__table2 = None
+        self.__table2: Optional["Table[T2]"] = None
 
         # relationships use lamdas to get id's from the related table
         rel_where = where[0].copy()
@@ -151,7 +154,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         super().__init__(_from, where=rel_where, cascade=True)
 
     @property
-    def table_2(self):
+    def table_2(self) -> Optional["Table[T2]"]:
         """Table-instance of the related table.
 
         Memoized getter/shortcut.
@@ -160,7 +163,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
             if not self._from._is_bound:
                 return None
             mgr: "Omen" = self._from._table.manager
-            self.__table2: "Table" = mgr.get_table_by_name(self.table_type_2.table_name)
+            self.__table2 = mgr.get_table_by_name(self.table_type_2.table_name)
             self.table_type_2 = type(self.__table2)
         return self.__table2
 
@@ -177,9 +180,8 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
                 else:
                     resolved[k] = getattr(obj, v)
 
-    def add(  # pylint: disable=arguments-renamed
-        self, obj_or_id: T2 = None, **kws
-    ) -> Union[T2, M2MMixObj[T1, T2]]:
+    # pylint: disable=arguments-renamed
+    def add(self, obj_or_id: T2 = None, **kws) -> ROW_TYPE:
         """Add a member of the m2m list, with extra kws for the m2m row."""
 
         if obj_or_id is None or not isinstance(obj_or_id, (M2MMixObj, ObjBase)):
@@ -210,7 +212,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
 
         return M2MMixObj(res, obj)
 
-    def select(self, _where={}, **kws) -> Iterable[Union[T2, M2MMixObj[T1, T2]]]:
+    def select(self, _where={}, **kws) -> Generator[ROW_TYPE, None, None]:
         """Select a member of the m2m list.
 
         Returns mixin objects that represents the relation.
@@ -233,7 +235,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
                 if mix._obj2._matches(kws2):
                     yield mix
 
-    def __call__(self, _id=None, **kws) -> Optional[Union[T2, M2MMixObj[T1, T2]]]:
+    def __call__(self, _id=None, **kws) -> ROW_TYPE:
         """Grab a specific entry by primary key or raise an error."""
         # noinspection PyProtectedMember
         if _id is not None:
@@ -243,7 +245,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
         return super().__call__(**kws)
 
     def remove(  # pylint: disable=arguments-renamed
-        self, obj_or_id: "ObjBase" = None, **kws
+        self, obj_or_id: T2 = None, **kws
     ):
         """Remove a specific entry by primary key or raise an error."""
         if not isinstance(obj_or_id, (ObjBase, M2MMixObj)) or not obj_or_id:
@@ -262,7 +264,7 @@ class M2MHelper(Relation[Union[T2, M2MMixObj[T1, T2]]]):
     def __len__(self):
         return sum(1 for _ in self.select())
 
-    def get(self, _id=None, _default=None, **kws) -> Optional[M2MMixObj[T1, T2]]:
+    def get(self, _id: T2 = None, _default=None, **kws) -> Optional[ROW_TYPE]:
         """Shortcut method, you can access object by a single pk/positional id."""
         if _id is not None:
             # if you only specify an id, we assume you mean the related-table's pk
