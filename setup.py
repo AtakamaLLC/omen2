@@ -15,7 +15,7 @@ def long_description():
 
 setup(
     name="omen2",
-    version="2.0.2",
+    version="2.0.3"
     description="Database object & cache manager",
     packages=["omen2"],
     long_description=long_description(),
