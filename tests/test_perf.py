@@ -49,6 +49,7 @@ def get_omen2_tmpd(version):
                     "--target",
                     tmpd,
                     "omen2==" + version,
+                    "notanorm==" + "3.1.0",
                 ]
             )
         except Exception:
@@ -59,21 +60,26 @@ def get_omen2_tmpd(version):
 
 
 def clear_omen():
-    import omen2
+    import omen2, notanorm
 
     cur1 = os.path.dirname(omen2.__file__)
+    cur2 = os.path.dirname(notanorm.__file__)
     delete = []
     for name, mod in sys.modules.items():
         mod_path = getattr(mod, "__file__", "")
         if cur1 in mod_path:
+            delete += [name]
+        if cur2 in mod_path:
             delete += [name]
 
     for ent in delete:
         del sys.modules[ent]
 
     for ent in delete:
-        __import__(ent)
-
+        try:
+            __import__(ent)
+        except ImportError:
+            pass
 
 @contextmanager
 def swap_version(version):
