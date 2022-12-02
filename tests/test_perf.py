@@ -60,26 +60,22 @@ def get_omen2_tmpd(version):
 
 
 def clear_omen():
-    import omen2, notanorm
+    import omen2
 
     cur1 = os.path.dirname(omen2.__file__)
-    cur2 = os.path.dirname(notanorm.__file__)
+
     delete = []
     for name, mod in sys.modules.items():
         mod_path = getattr(mod, "__file__", "")
         if cur1 in mod_path:
-            delete += [name]
-        if cur2 in mod_path:
             delete += [name]
 
     for ent in delete:
         del sys.modules[ent]
 
     for ent in delete:
-        try:
-            __import__(ent)
-        except ImportError:
-            pass
+        __import__(ent)
+
 
 @contextmanager
 def swap_version(version):
