@@ -14,7 +14,7 @@ Args:
     module_path: package.module.ClassName
 
 
-#### .gen\_class(out, name, dbtab:'DbTable')
+#### .gen\_class(out, name, dbtab: 'DbTable')
 Generate the derived classes for a single DBTable
 
 Args:

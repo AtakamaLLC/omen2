@@ -1,4 +1,5 @@
-DELETE_ON_ERROR:
+# todo: this horrible thing is needed to deal with an back incompat thing in notanorm
+NOTANORM := $(shell pip freeze | grep notanorm)
 
 env:
 	python -mvirtualenv env
@@ -19,7 +20,10 @@ black:
 test:
 	pytest -n=3 --cov omen2 -v tests -k "not perf"
 	# parallel testing of perf tests doesn't work
+	# also need to swap in old notanorm
+	pip install --isolated notanorm==3.1
 	pytest --cov omen2 --cov-append -v tests -k "perf"
+	pip install --isolated $(NOTANORM)
 
 publish:
 	rm -rf dist
@@ -31,3 +35,4 @@ install-hooks:
 
 
 .PHONY: docs black publish env requirements
+.DELETE_ON_ERROR:

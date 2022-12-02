@@ -49,6 +49,7 @@ def get_omen2_tmpd(version):
                     "--target",
                     tmpd,
                     "omen2==" + version,
+                    "notanorm==" + "3.1.0",
                 ]
             )
         except Exception:
@@ -62,6 +63,7 @@ def clear_omen():
     import omen2
 
     cur1 = os.path.dirname(omen2.__file__)
+
     delete = []
     for name, mod in sys.modules.items():
         mod_path = getattr(mod, "__file__", "")

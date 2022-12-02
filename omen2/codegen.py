@@ -97,7 +97,12 @@ class CodeGen:
             print("    %s: %s" % (col.name, typename), file=out)
 
         # _pk is a class-variable
-        print("    _pk = ('" + "', '".join(keys) + "', )", file=out)
+        print(
+            "    _pk = ('"
+            + "', '".join([k if type(k) is str else k.name for k in keys])
+            + "', )",
+            file=out,
+        )
         print("", file=out)
 
         # generate an init statement for the new class
