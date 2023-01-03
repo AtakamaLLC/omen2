@@ -282,7 +282,7 @@ class Table(Selectable[T]):
                 remove_from_cache.add(k)
         for pop_me in remove_from_cache:
             log.debug("removing %s from cache", pop_me)
-            self._cache.pop(pop_me)
+            self._cache.pop(pop_me, None)  # Don't raise if not in cache
 
     def select(self, _where={}, _order_by=None, **kws) -> Generator[T, None, None]:
         """Read objects of specified class.
