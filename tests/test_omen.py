@@ -736,6 +736,17 @@ def test_other_types():
     assert not blob.boo
 
 
+def test_select_any_one():
+    db = SqliteDb(":memory:")
+    mgr = MyOmen(db, cars=Cars)
+    mgr.cars = mgr[Cars]
+    car = mgr.cars.add(Car(id=1, gas_level=2, color="green"))
+    car = mgr.cars.add(Car(id=2, gas_level=2, color="green"))
+    with pytest.raises(OmenMoreThanOneError):
+        mgr.cars.select_one(gas_level=2)
+    assert mgr.cars.select_any_one(gas_level=2)
+
+
 def test_any_type():
     whatever = gen_objs.whatever
     whatever_row = gen_objs.whatever_row

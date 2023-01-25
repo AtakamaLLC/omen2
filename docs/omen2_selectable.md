@@ -16,6 +16,9 @@ Shortcut method, you can access object by a single pk/positional id.
 #### .select(self, \_where={}, **kws) -> Generator[~T, NoneType, NoneType]
 Read objects of specified class.
 
+#### .select\_any\_one(self, \_where={}, **kws) -> Optional[~T]
+Return one row or None, doesn't raise an error if there is more than one.
+
 #### .select\_one(self, \_where={}, **kws) -> Optional[~T]
 Return one row, None, or raises an OmenMoreThanOneError.
 

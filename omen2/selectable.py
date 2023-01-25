@@ -57,12 +57,21 @@ class Selectable(Generic[T]):
         itr = self.select(_where, **kws)
         return self._return_one(itr)
 
+    def select_any_one(self, _where={}, **kws) -> Optional[T]:
+        """Return one row or None, doesn't raise an error if there is more than one."""
+        itr = self.select(_where, **kws)
+        return self._return_any_one(itr)
+
     @staticmethod
-    def _return_one(itr: Generator[T, None, None]) -> Optional[T]:
+    def _return_any_one(itr: Generator[T, None, None]) -> Optional[T]:
         try:
-            one = next(itr)
+            return next(itr)
         except StopIteration:
             return None
+
+    @classmethod
+    def _return_one(cls, itr: Generator[T, None, None]) -> Optional[T]:
+        one = cls._return_any_one(itr)
 
         try:
             next(itr)
