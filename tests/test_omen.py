@@ -1117,6 +1117,7 @@ def test_other_attrs():
 
 def test_disable_allow_auto():
     db = SqliteDb(":memory:")
+
     with patch.object(Cars, "allow_auto", False):
         mgr = MyOmen(db)
         mgr.cars = Cars(mgr)

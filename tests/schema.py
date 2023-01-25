@@ -29,6 +29,7 @@ atexit.register(_cleanup_temp)
 
 class MyOmen(Omen):
     version = 2
+    dialect = "sqlite"
 
     @classmethod
     def schema(cls, version):
