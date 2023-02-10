@@ -55,7 +55,9 @@ class Selectable(Generic[T]):
     def select_one(self, _where={}, **kws) -> Optional[T]:
         """Return one row, None, or raises an OmenMoreThanOneError."""
         itr = self.select(_where, **kws)
-        return self._return_one(itr)
+        out = self._return_one(itr)
+        itr.close()
+        return out
 
     def select_any_one(self, _where={}, **kws) -> Optional[T]:
         """Return one row or None, doesn't raise an error if there is more than one."""
